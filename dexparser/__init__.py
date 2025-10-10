@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import io
 from typing import Iterator
 
@@ -107,9 +108,14 @@ class DEX(HachoirParser, RootSeekableFieldSet):
 
         code_item = self["map_list"].get_code_item()
         if code_item:
-            self.seekByte(code_item["offset"].value, relative=False)
+            print("STARTING", code_item["size"].value, code_item["offset"].value, code_item["offset"].value % 4)
+
+            self.seekByte(code_item["offset"].value + code_item["offset"].value % 4, relative=False)
             for index in range(code_item["size"].value):
                 yield CodeItem(self, "code_item[]")
+
+                print("HERE", self["code_item[%d]" % index].absolute_address, int(self["code_item[%d]" % index].absolute_address / 8) % 4)
+
 
     def validate(self):
         LOGGER.info("validate")
@@ -129,17 +135,27 @@ class DEX(HachoirParser, RootSeekableFieldSet):
             return err
         return True
 
-
-class MethodHelper(object):
-    def __init__(self, name, type_method):
-        self.name = name
-        self.type_method = type_method
+@dataclass
+class MethodHelper:
+    name: str
+    type_method: str
+    code_off: int
 
 
 class DEXHelper(object):
     def __init__(self, raw_dex: DEX):
         self.raw_dex: DEX = raw_dex
         self.raw_dex.validate()
+
+        self.code_off = {}
+
+        print("Indexing code offset")
+        code_item = self.raw_dex["map_list"].get_code_item()
+        if code_item:
+            for index_code in range(code_item["size"].value):
+                self.code_off[int(self.raw_dex["code_item[%d]" % index_code].absolute_address/8)] = self.raw_dex["code_item[%d]" % index_code]
+
+        print(self.code_off)
 
     @staticmethod
     def from_rawdex(raw_dex: DEX):
@@ -244,8 +260,12 @@ class DEXHelper(object):
                         "class_data_item[%d]/direct_methods[%d]/method_idx_diff"
                         % (index, index_method)
                     ].value
+                    code_off = self.raw_dex[
+                        "class_data_item[%d]/direct_methods[%d]/code_off"
+                        % (index, index_method)
+                    ].value
                     method_idx = method_idx_diff + prev
-                    yield MethodHelper(self.get_method_name(method_idx), 'D')
+                    yield MethodHelper(self.get_method_name(method_idx), 'D', code_off)
                     prev = method_idx
             except MissingField:
                 LOGGER.warning("MissingField")
@@ -261,8 +281,12 @@ class DEXHelper(object):
                         "class_data_item[%d]/virtual_methods[%d]/method_idx_diff"
                         % (index, index_method)
                     ].value
+                    code_off = self.raw_dex[
+                        "class_data_item[%d]/virtual_methods[%d]/code_off"
+                        % (index, index_method)
+                    ].value
                     method_idx = method_idx_diff + prev
-                    yield MethodHelper(self.get_method_name(method_idx), 'V')
+                    yield MethodHelper(self.get_method_name(method_idx), 'V', code_off)
                     prev = method_idx
             except MissingField:
                 LOGGER.warning("MissingField")

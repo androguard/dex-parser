@@ -30,8 +30,13 @@ def app():
 
         print(dh)
 
-        if arguments.strings:
-            print([i for i in dh.get_strings()])
+        for method in dh.get_methods():
+            print(method)
+
+
+        #if arguments.strings:
+        #    print([i for i in dh.get_strings()])
+
 
     return 0
 
