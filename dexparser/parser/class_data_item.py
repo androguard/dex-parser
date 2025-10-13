@@ -14,18 +14,14 @@ class ClassDataItem(FieldSet):
         yield ULeb128(self, "direct_methods_size", "direct_methods_size")
         yield ULeb128(self, "virtual_methods_size", "virtual_methods_size")
 
-        if self["static_fields_size"].value:
-            for index in range(self["static_fields_size"].value):
-                yield EncodedField(self, "static_fields[]")
+        for _ in range(self["static_fields_size"].value):
+            yield EncodedField(self, "static_fields[]")
 
-        if self["instance_fields_size"].value:
-            for index in range(self["instance_fields_size"].value):
-                yield EncodedField(self, "instance_fields[]")
+        for _ in range(self["instance_fields_size"].value):
+            yield EncodedField(self, "instance_fields[]")
 
-        if self["direct_methods_size"].value:
-            for index in range(self["direct_methods_size"].value):
-                yield EncodedMethod(self, "direct_methods[]")
+        for _ in range(self["direct_methods_size"].value):
+            yield EncodedMethod(self, "direct_methods[]")
 
-        if self["virtual_methods_size"].value:
-            for index in range(self["virtual_methods_size"].value):
-                yield EncodedMethod(self, "virtual_methods[]")
+        for _ in range(self["virtual_methods_size"].value):
+            yield EncodedMethod(self, "virtual_methods[]")

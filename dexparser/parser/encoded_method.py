@@ -2,6 +2,7 @@ from hachoir.field import Bytes, FieldSet, UInt32
 
 from dexparser.helper.logging import LOGGER
 
+from .code_item import CodeItem
 from .utils import ULeb128
 
 

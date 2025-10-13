@@ -31,12 +31,11 @@ def app():
         print(dh)
 
         for method in dh.get_methods():
-            print(method)
-
-
-        #if arguments.strings:
-        #    print([i for i in dh.get_strings()])
-
+            print("START", method)
+            code = method.get_code()
+            if code:
+                print(code["debug_info_off"], code["insns_size"])
+            print("END")
 
     return 0
 

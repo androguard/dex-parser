@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Software Development",
     "Topic :: Utilities",
 ]
-dependencies = ["rich>=14.0.0", "hachoir>=3.3.0"]
+dependencies = ["rich~=14.0.0", "hachoir>=3.3.0"]
 
 [project.scripts]
 dexparser = "dexparser.main:app"
