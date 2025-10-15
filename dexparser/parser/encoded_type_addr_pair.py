@@ -1,7 +1,5 @@
-from dexparser.parser.try_item import TryItem
-from hachoir.field import Bytes, FieldSet, UInt16, UInt32
+from hachoir.field import FieldSet
 
-from dexparser.helper.logging import LOGGER
 from .utils import ULeb128
 
 

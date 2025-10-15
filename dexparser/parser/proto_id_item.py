@@ -1,6 +1,4 @@
-from hachoir.field import Bytes, FieldSet, UInt32
-
-from dexparser.helper.logging import LOGGER
+from hachoir.field import FieldSet, UInt32
 
 
 class ProtoIdItem(FieldSet):

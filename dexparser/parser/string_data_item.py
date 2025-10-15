@@ -1,6 +1,4 @@
-from hachoir.field import Bits, Bytes, FieldError, FieldSet, String, UInt8, UInt32
-
-from dexparser.helper.logging import LOGGER
+from hachoir.field import FieldSet, String
 
 from .utils import ULeb128
 

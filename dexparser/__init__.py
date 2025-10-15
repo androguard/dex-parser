@@ -1,12 +1,9 @@
-from dataclasses import dataclass
 import io
+from dataclasses import dataclass
 from typing import Iterator
 
 from hachoir.core.endian import LITTLE_ENDIAN
-from hachoir.field import (
-    MissingField,
-    RootSeekableFieldSet,
-)
+from hachoir.field import MissingField, RootSeekableFieldSet
 from hachoir.parser import HachoirParser
 from hachoir.stream import StringInputStream
 
@@ -15,6 +12,7 @@ from dexparser.parser import constants
 from dexparser.parser.class_data_item import ClassDataItem
 from dexparser.parser.class_def_item import ClassDefItem
 from dexparser.parser.code_item import CodeItem
+from dexparser.parser.field_id_item import FieldIdItem
 from dexparser.parser.header import HeaderItem
 from dexparser.parser.map_list import MapList
 from dexparser.parser.method_id_item import MethodIdItem
@@ -22,6 +20,7 @@ from dexparser.parser.proto_id_item import ProtoIdItem
 from dexparser.parser.string_data_item import StringDataItem
 from dexparser.parser.string_id_item import StringIdItem
 from dexparser.parser.type_id_item import TypeIdItem
+
 
 class DEX(HachoirParser, RootSeekableFieldSet):
     """
@@ -91,6 +90,10 @@ class DEX(HachoirParser, RootSeekableFieldSet):
         for _ in range(self["header/method_ids_size"].value):
             yield MethodIdItem(self, "method_id_item[]")
 
+        self.seekByte(self["header/field_ids_off"].value, relative=False)
+        for _ in range(self["header/field_ids_size"].value):
+            yield FieldIdItem(self, "field_id_item[]")
+
         self.seekByte(self["header/class_defs_off"].value, relative=False)
         for _ in range(self["header/class_defs_size"].value):
             yield ClassDefItem(self, "class_id_item[]")
@@ -117,7 +120,11 @@ class DEX(HachoirParser, RootSeekableFieldSet):
                         ].value
                         if code_off > 0:
                             self.seekByte(code_off, relative=False)
-                            yield CodeItem(self, "direct_methods_code_%d_%d" % (index, index_method))
+                            yield CodeItem(
+                                self,
+                                "direct_methods_code_%d_%d"
+                                % (index, index_method),
+                            )
 
                 except MissingField as e:
                     LOGGER.warning("MissingField", str(e))
@@ -134,7 +141,11 @@ class DEX(HachoirParser, RootSeekableFieldSet):
                         ].value
                         if code_off > 0:
                             self.seekByte(code_off, relative=False)
-                            yield CodeItem(self, "virtual_methods_code_%d_%d" % (index, index_method))
+                            yield CodeItem(
+                                self,
+                                "virtual_methods_code_%d_%d"
+                                % (index, index_method),
+                            )
                 except MissingField as e:
                     LOGGER.warning("MissingField", str(e))
 
@@ -156,29 +167,75 @@ class DEX(HachoirParser, RootSeekableFieldSet):
             return err
         return True
 
+
+@dataclass
+class ClassHelper:
+    raw_dex: DEX
+    name: str
+    sname: str
+
+
 @dataclass
 class MethodHelper:
     raw_dex: DEX
     name: str
+    class_name: str
+    proto: list[str]
     type_method: str
+    method_idx: int
     code_off: int
     idx_class: int
-    idx : int
+    idx: int
+
+    def get_internal_struct(self):
+        if self.type_method == 'V':
+            return self.raw_dex[
+                f"class_data_item[{self.idx_class}]/virtual_methods[{self.idx}]"
+            ]
+
+        return self.raw_dex[
+            f"class_data_item[{self.idx_class}]/direct_methods[{self.idx}]"
+        ]
 
     def get_code(self):
         if self.code_off <= 0:
             return None
-        
+
         if self.type_method == 'V':
-            return self.raw_dex["virtual_methods_code_%d_%d" % (self.idx_class, self.idx)]
-        else:
-            return self.raw_dex["direct_methods_code_%d_%d" % (self.idx_class, self.idx)]
+            return self.raw_dex[
+                "virtual_methods_code_%d_%d" % (self.idx_class, self.idx)
+            ]
+        return self.raw_dex[
+            "direct_methods_code_%d_%d" % (self.idx_class, self.idx)
+        ]
+
+
+@dataclass
+class FieldHelper:
+    raw_dex: DEX
+    name: str
+    class_name: str
+    type_field: str
+    idx_class: int
+    idx: int
+
+    def get_internal_struct(self):
+        if self.type_field == 'S':
+            return self.raw_dex[
+                f"class_data_item[{self.idx_class}]/static_fields[{self.idx}]"
+            ]
+
+        return self.raw_dex[
+            f"class_data_item[{self.idx_class}]/instance_fields[{self.idx}]"
+        ]
 
 
 class DEXHelper(object):
     def __init__(self, raw_dex: DEX):
         self.raw_dex: DEX = raw_dex
         self.raw_dex.validate()
+
+        self.__cached_strings = {}
 
     @staticmethod
     def from_rawdex(raw_dex: DEX):
@@ -190,58 +247,13 @@ class DEXHelper(object):
         raw.seek(0)
         return DEXHelper.from_rawdex(DEX(StringInputStream(raw.read())))
 
-    def print(self):
-        for field in self.raw_dex:
-            LOGGER.info(
-                "%s:%s %s=%s [%d]"
-                % (
-                    hex(field.address),
-                    hex(field.absolute_address),
-                    field.name,
-                    field.display,
-                    field.size,
-                )
-            )
-        print(self.raw_dex['header'])
-        for field in self.raw_dex['header']:
-            LOGGER.info(
-                "%s:%s %s=%s [%d]"
-                % (
-                    hex(field.address),
-                    hex(field.absolute_address),
-                    field.name,
-                    field.display,
-                    field.size,
-                )
-            )
-
-        for field in self.raw_dex['map_list']:
-            LOGGER.info(
-                "%s:%s %s=%s [%d]"
-                % (
-                    hex(field.address),
-                    hex(field.absolute_address),
-                    field.name,
-                    field.display,
-                    field.size,
-                )
-            )
-            if "map_item" in field.name:
-                for sub_field in field:
-                    LOGGER.info(
-                        "\t%s:%s %s=%s [%d]"
-                        % (
-                            hex(sub_field.address),
-                            hex(sub_field.absolute_address),
-                            sub_field.name,
-                            sub_field.display,
-                            sub_field.size,
-                        )
-                    )
-
     def get_classes(self) -> Iterator[ClassDefItem]:
         for index in range(self.raw_dex["header/class_defs_size"].value):
-            yield self.raw_dex["class_id_item[%d]" % index]
+            yield ClassHelper(
+                self.raw_dex,
+                self._get_class_name(index),
+                self._get_sclass_name(index),
+            )
 
     def get_strings(self) -> Iterator[str]:
         for index in range(self.raw_dex["header/string_ids_size"].value):
@@ -251,16 +263,89 @@ class DEXHelper(object):
                 pass
 
     def get_string_by_idx(self, idx):
-        return self.raw_dex["string_data_item[%d]/data" % idx].value
+        if idx in self.__cached_strings:
+            return self.__cached_strings[idx]
 
-    def get_method_name(self, idx) -> str:
+        data = self.raw_dex["string_data_item[%d]/data" % idx].value
+        self.__cached_strings[idx] = data
+        return data
+
+    def _get_sclass_name(self, idx):
+        superclass_idx = self.raw_dex[
+            "class_id_item[%d]/superclass_idx" % idx
+        ].value
+        name_idx = self.raw_dex[
+            "type_id_item[%d]/descriptor_idx" % superclass_idx
+        ].value
+        return self.get_string_by_idx(name_idx)
+
+    def _get_class_name(self, idx):
+        class_idx = self.raw_dex["class_id_item[%d]/class_idx" % idx].value
+        name_idx = self.raw_dex[
+            "type_id_item[%d]/descriptor_idx" % class_idx
+        ].value
+        return self.get_string_by_idx(name_idx)
+
+    def _get_proto(self, idx) -> list[str]:
+        try:
+            proto_idx = self.raw_dex[
+                "method_id_item[%d]/proto_idx" % idx
+            ].value
+            shorty_idx = self.raw_dex[
+                "proto_id_item[%d]/shorty_idx" % proto_idx
+            ].value
+
+            return_type_idx = self.raw_dex[
+                "proto_id_item[%d]/return_type_idx" % proto_idx
+            ].value
+            descriptor_idx = self.raw_dex[
+                "type_id_item[%d]/descriptor_idx" % return_type_idx
+            ].value
+
+            return [
+                self.get_string_by_idx(shorty_idx),
+                self.get_string_by_idx(descriptor_idx),
+            ]
+        except MissingField:
+            return []
+
+    def _get_method_class_name(self, idx) -> str:
+        try:
+            class_idx = self.raw_dex[
+                "method_id_item[%d]/class_idx" % idx
+            ].value
+            name_idx = self.raw_dex[
+                "type_id_item[%d]/descriptor_idx" % class_idx
+            ].value
+            return self.get_string_by_idx(name_idx)
+        except MissingField:
+            return "Unknown @%s" % hex(idx)
+
+    def _get_method_name(self, idx) -> str:
         try:
             name_idx = self.raw_dex["method_id_item[%d]/name_idx" % idx].value
             return self.get_string_by_idx(name_idx)
         except MissingField:
             return "Unknown @%s" % hex(idx)
 
-    def get_type_value(self, idx) -> str:
+    def _get_field_class_name(self, idx) -> str:
+        try:
+            class_idx = self.raw_dex["field_id_item[%d]/class_idx" % idx].value
+            name_idx = self.raw_dex[
+                "type_id_item[%d]/descriptor_idx" % class_idx
+            ].value
+            return self.get_string_by_idx(name_idx)
+        except MissingField:
+            return "Unknown @%s" % hex(idx)
+
+    def _get_field_name(self, idx) -> str:
+        try:
+            name_idx = self.raw_dex["field_id_item[%d]/name_idx" % idx].value
+            return self.get_string_by_idx(name_idx)
+        except MissingField:
+            return "Unknown @%s" % hex(idx)
+
+    def _get_type_value(self, idx) -> str:
         try:
             descriptor_idx = self.raw_dex[
                 "type_id_item[%d]/descriptor_idx" % idx
@@ -275,7 +360,6 @@ class DEXHelper(object):
             return
 
         for index in range(class_data_item["size"].value):
-            print("NEW CLASS")
             prev = 0
             try:
                 for index_method in range(
@@ -292,10 +376,20 @@ class DEXHelper(object):
                         % (index, index_method)
                     ].value
                     method_idx = method_idx_diff + prev
-                    yield MethodHelper(self.raw_dex, self.get_method_name(method_idx), 'D', code_off, index, index_method)
+                    yield MethodHelper(
+                        self.raw_dex,
+                        self._get_method_name(method_idx),
+                        self._get_method_class_name(method_idx),
+                        self._get_proto(method_idx),
+                        'D',
+                        method_idx,
+                        code_off,
+                        index,
+                        index_method,
+                    )
                     prev = method_idx
             except MissingField:
-                LOGGER.warning("MissingField")
+                LOGGER.warning("Direct Method MissingField")
 
             prev = 0
             try:
@@ -313,7 +407,71 @@ class DEXHelper(object):
                         % (index, index_method)
                     ].value
                     method_idx = method_idx_diff + prev
-                    yield MethodHelper(self.raw_dex, self.get_method_name(method_idx), 'V', code_off, index, index_method)
+                    yield MethodHelper(
+                        self.raw_dex,
+                        self._get_method_name(method_idx),
+                        self._get_method_class_name(method_idx),
+                        self._get_proto(method_idx),
+                        'V',
+                        method_idx,
+                        code_off,
+                        index,
+                        index_method,
+                    )
                     prev = method_idx
             except MissingField:
-                LOGGER.warning("MissingField")
+                LOGGER.warning("Virtual Method MissingField")
+
+    def get_fields(self) -> Iterator[MethodHelper]:
+        class_data_item = self.raw_dex["map_list"].get_class_data_item()
+        if not class_data_item:
+            return
+
+        for index in range(class_data_item["size"].value):
+            prev = 0
+            try:
+                for index_field in range(
+                    self.raw_dex[
+                        "class_data_item[%d]/static_fields_size" % index
+                    ].value
+                ):
+                    field_idx_diff = self.raw_dex[
+                        "class_data_item[%d]/static_fields[%d]/field_idx_diff"
+                        % (index, index_field)
+                    ].value
+                    field_idx = field_idx_diff + prev
+                    yield FieldHelper(
+                        self.raw_dex,
+                        self._get_field_name(field_idx),
+                        self._get_field_class_name(field_idx),
+                        'S',
+                        index,
+                        index_field,
+                    )
+                    prev = field_idx
+            except MissingField:
+                LOGGER.warning("Static Field MissingField")
+
+            prev = 0
+            try:
+                for index_field in range(
+                    self.raw_dex[
+                        "class_data_item[%d]/instance_fields_size" % index
+                    ].value
+                ):
+                    field_idx_diff = self.raw_dex[
+                        "class_data_item[%d]/instance_fields[%d]/field_idx_diff"
+                        % (index, index_field)
+                    ].value
+                    field_idx = field_idx_diff + prev
+                    yield FieldHelper(
+                        self.raw_dex,
+                        self._get_field_name(field_idx),
+                        self._get_field_class_name(field_idx),
+                        'I',
+                        index,
+                        index_field,
+                    )
+                    prev = field_idx
+            except MissingField:
+                LOGGER.warning("Instance Field MissingField")

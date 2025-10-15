@@ -1,8 +1,5 @@
 from hachoir.core.text_handler import hexadecimal, textHandler
-from hachoir.field import Bytes, Enum, FieldSet, UInt16, UInt32
-
-from dexparser.helper.logging import LOGGER
-from dexparser.parser.string_id_item import StringIdItem
+from hachoir.field import Enum, FieldSet, UInt16, UInt32
 
 
 class MapItem(FieldSet):

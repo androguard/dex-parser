@@ -1,6 +1,5 @@
-from hachoir.field import Bytes, FieldSet, UInt32
+from hachoir.field import FieldSet, UInt32
 
-from dexparser.helper.logging import LOGGER
 from dexparser.parser.map_item import MapItem
 
 

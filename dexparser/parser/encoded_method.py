@@ -1,8 +1,5 @@
-from hachoir.field import Bytes, FieldSet, UInt32
+from hachoir.field import FieldSet
 
-from dexparser.helper.logging import LOGGER
-
-from .code_item import CodeItem
 from .utils import ULeb128
 
 

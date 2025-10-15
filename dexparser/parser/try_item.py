@@ -1,6 +1,4 @@
-from hachoir.field import Bytes, FieldSet, UInt16, UInt32
-
-from dexparser.helper.logging import LOGGER
+from hachoir.field import FieldSet, UInt16, UInt32
 
 
 class TryItem(FieldSet):

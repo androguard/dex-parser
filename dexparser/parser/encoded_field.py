@@ -1,8 +1,7 @@
-from hachoir.field import Bytes, FieldSet, UInt32
-
-from dexparser.helper.logging import LOGGER
+from hachoir.field import FieldSet
 
 from .utils import ULeb128
+
 
 class EncodedField(FieldSet):
     def createFields(self):

@@ -58,7 +58,7 @@ class SLeb128(Bits):
 
         for x in range(0, 5):
             value = self._parent.stream.readBits(
-                self.absolute_address + 8*x, 8, LITTLE_ENDIAN
+                self.absolute_address + 8 * x, 8, LITTLE_ENDIAN
             )
             result |= (value & 0x7F) << shift
             shift += 7
