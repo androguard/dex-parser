@@ -52,7 +52,7 @@ You can directly use it by command line to parse and display quickly information
 $ dexparser -i Test.dex
 ```
 
-## Usage
+## Usage
 
 You can open a dex file directly by using the ```DEX``` class:
 ```
