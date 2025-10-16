@@ -4,6 +4,9 @@
 <div align="center">
 
 ![Powered By: Androguard](https://img.shields.io/badge/androguard-green?style=for-the-badge&label=Powered%20by&link=https%3A%2F%2Fgithub.com%2Fandroguard)
+![Sponsor](https://img.shields.io/badge/sponsor-nlnet-blue?style=for-the-badge&link=https%3A%2F%2Fnlnet.nl%2F)
+![PYPY](https://img.shields.io/badge/PYPI-DEXPARSER-violet?style=for-the-badge&link=https%3A%2F%2Fpypi.org%2Fproject%2Fdexparser-ag%2F)
+
 
 </div>
 
@@ -65,6 +68,20 @@ and after access to each subfields:
 print(d["header"])
 print(d["headermagic/magic"].value)
 ```
+
+Main fields that are accessible are:
+ - header
+ - map_list
+ - string_id_item
+ - string_data_item
+ - proto_id_item
+ - type_id_item
+ - method_id_item
+ - field_id_item
+ - class_id_item
+ - class_data_item
+
+And so you can have access to all subfields, please see each corresponding class in the source code :)
 
 Or you can use the ```DEXHelper``` class to quickly get access to class name, method name,
 field name, but also code item for each method for disassembling:
