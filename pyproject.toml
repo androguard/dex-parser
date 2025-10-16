@@ -5,7 +5,6 @@ license = { file = "LICENSE" }
 keywords = ["Android, Androguard, Security"]
 description = "DEX Parser"
 requires-python = ">=3.10"
-dynamic = ["version"]
 authors = [{ name = "anthony", email = "ping@42.bzh" }]
 version = "0.0.1"
 
