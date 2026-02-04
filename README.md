@@ -102,6 +102,68 @@ for method in dh.get_methods():
             )
             my_func_to_disassemble(code["insns"].value)
 ```
+
+## Rust implementation
+
+A pure Rust implementation lives in `dexparser-rs/`. It parses the same DEX structure and can be used without Python.
+
+### Parsing flow
+
+```
+  &[u8] (file bytes)
+       │
+       ▼  DexFile::parse()
+  +─────────────+
+  |   DexFile    |  header + string_ids, type_ids, proto_ids, field_ids, method_ids (index tables)
+  +─────────────+
+       │
+       │  DexHelper::from_dex(&dex)
+       ▼
+  +─────────────+
+  |  DexHelper  |  high-level iterators over the same DexFile
+  +─────────────+
+       │
+       ├──►  classes()   ──►  ClassInfo (name, superclass_name) per class_def
+       ├──►  methods()   ──►  MethodInfoItem (class, name, proto, code_item) per direct/virtual method
+       └──►  fields()    ──►  FieldInfoItem (class, name, type) per static/instance field
+```
+
+### DEX file layout (what the parser reads)
+
+```
+  +------------------+
+  |  header_item    |  magic "dex\n", version, file_size, offsets for every section
+  +------------------+
+  |  string_ids[]   |  offset → string_data (MUTF-8) in data section
+  |  type_ids[]     |  descriptor_idx → string_ids
+  |  proto_ids[]    |  shorty_idx, return_type_idx, parameters_off
+  |  field_ids[]    |  class_idx, type_idx, name_idx
+  |  method_ids[]   |  class_idx, proto_idx, name_idx
+  |  class_defs[]   |  class_idx, superclass_idx, class_data_off, ...
+  +------------------+
+  |  map_list       |  (type, count, offset) for each section
+  +------------------+
+  |  data section   |  string_data, type_list, class_data_item, code_item (insns), ...
+  +------------------+
+```
+
+### CLI tools
+
+```
+  dexparser          single file: parse and print header, classes, methods, fields
+       │             usage:  dexparser -i classes.dex [-s] [-v]
+       │
+  dexparse-dir       directory: find DEX files (by magic or .dex), parse each, report time per file
+       │             usage:  dexparse-dir -d /path [-r] [--by-extension]
+       │
+       └──►  with --features disasm (dex-bytecode):  parse + disassemble all method bytecode
+                                     │
+                                     ▼
+                              "X.XX ms parse  Y.YY ms disasm  file.dex  (classes=... insns=...)"
+```
+
+See `dexparser-rs/README.md` for API details, dependency, and optional disassembly with [dex-bytecode](https://github.com/androguard/dex-bytecode).
+
 ## License
 
 Distributed under the [Apache License, Version 2.0](LICENSE).
