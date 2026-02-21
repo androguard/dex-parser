@@ -108,11 +108,10 @@ Classes are defined in `class_defs[]`. Each entry can point to a `class_data_ite
 
 ## CLI
 
-Build and run the command-line tool to test the parser on a DEX file:
+Run the command-line tool to test the parser on a DEX file:
 
 ```bash
-cargo build --release --bin dexparser
-./target/release/dexparser -i path/to/classes.dex
+cargo run --release --bin dexparser -- -i path/to/classes.dex
 ```
 
 Options:
@@ -132,20 +131,18 @@ dexparser -i classes.dex -s -v
 Parse all DEX files in a directory and print time per file:
 
 ```bash
-cargo build --release --bin dexparse-dir
-./target/release/dexparse-dir -d /path/to/dir           # by default: detect by magic (any extension)
-./target/release/dexparse-dir -d /path/to/dir -r        # recursive
-./target/release/dexparse-dir -d /path/to/dir --by-extension   # only .dex extension
+cargo run --release --bin dexparse-dir -- -d /path/to/dir           # by default: detect by magic (any extension)
+cargo run --release --bin dexparse-dir -- -d /path/to/dir -r        # recursive
+cargo run --release --bin dexparse-dir -- -d /path/to/dir --by-extension   # only .dex extension
 ```
 
 - **Default:** read the first 4 bytes of every file; if they equal DEX magic (`dex\n`), treat the file as DEX. Finds `classes.dex`, `base.dex`, or renamed files.
 - `--by-extension`: only consider files with `.dex` extension.
 
-**Disassembly (parse + disasm timing):** build with the `disasm` feature and depend on [dex-bytecode](../dex-bytecode). Then each file is parsed and all method bytecode is disassembled; parse time and disasm time are reported separately, plus total instruction count:
+**Disassembly (parse + disasm timing):** run with the `disasm` feature (depends on [dex-bytecode](../dex-bytecode)). Each file is parsed and all method bytecode is disassembled; parse time and disasm time are reported separately, plus total instruction count:
 
 ```bash
-cargo build --release --bin dexparse-dir --features disasm
-./target/release/dexparse-dir -d /path/to/dir
+cargo run --release --bin dexparse-dir --features disasm -- -d /path/to/dir
 # Example: "31.41 ms parse  1487.62 ms disasm  classes.dex  (classes=5920 methods=56536 strings=66640 insns=646166)"
 ```
 
