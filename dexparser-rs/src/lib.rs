@@ -26,6 +26,7 @@
 pub mod error;
 pub mod leb128;
 pub mod dex;
+pub mod multidex;
 
 pub use error::{DexError, Result};
 pub use dex::{
@@ -35,6 +36,7 @@ pub use dex::{
     MethodInfo, MethodInfoItem, MethodType, ProtoId,
     DEX_MAGIC, NO_INDEX, is_dex,
 };
+pub use multidex::{MultiDexHelper, DexSource, Sourced};
 
 #[cfg(test)]
 mod test_helpers {

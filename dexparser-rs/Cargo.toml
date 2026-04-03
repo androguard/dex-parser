@@ -12,6 +12,7 @@ authors = ["anthony <ping@42.bzh>"]
 thiserror = "1.0"
 clap = { version = "4", features = ["derive"] }
 dex-bytecode = { git = "https://github.com/androguard/dex-bytecode.git", optional = true }
+zip = { version = "2", optional = true, default-features = false, features = ["deflate"] }
 
 [[bin]]
 name = "dexparser"
@@ -24,6 +25,7 @@ path = "src/bin/dexparse_dir.rs"
 [features]
 default = []
 disasm = ["dep:dex-bytecode"]
+apk = ["dep:zip"]
 
 [dev-dependencies]
 # optional: for tests with minimal DEX bytes

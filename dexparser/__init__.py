@@ -475,3 +475,6 @@ class DEXHelper(object):
                     prev = field_idx
             except MissingField:
                 LOGGER.warning("Instance Field MissingField")
+
+
+from dexparser.multidex import MultiDEXHelper, DexSource

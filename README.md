@@ -28,7 +28,7 @@ Following the "Deconstruct to Reconstruct" philosophy, dex-parser operates as a 
 - On demand access for each fields by using [Hachoir library](https://github.com/vstinner/hachoir).
 - Cross-Reference Ready: Lays the groundwork for building cross-references by cleanly separating method and field definitions from their invocations.
 - Pure & Pythonic: Written in native Python with zero external dependencies for maximum portability.
-- [TODO] Multi-DEX Aware: Natively understands and can parse classes.dex, classes2.dex, and so on, providing a unified view of the application's code.
+- Multi-DEX Aware: Natively understands and can parse classes.dex, classes2.dex, and so on, providing a unified view of the application's code. Accepts APK files or directories of DEX files.
 
 ## Installation
 
@@ -101,6 +101,57 @@ for method in dh.get_methods():
                 len(code["insns"].value),
             )
             my_func_to_disassemble(code["insns"].value)
+```
+
+## Multi-DEX Usage
+
+### Python
+
+Parse all DEX files from an APK:
+```python
+from dexparser import MultiDEXHelper
+
+multi = MultiDEXHelper.from_apk("app.apk")
+print(f"Loaded {multi.dex_count()} DEX files")
+
+for source, cls in multi.get_classes():
+    print(f"[{source.filename}] CLASS {cls.name}")
+
+for source, method in multi.get_methods():
+    print(f"[{source.filename}] METHOD {method.class_name}.{method.name}")
+```
+
+Or from a directory of DEX files:
+```python
+multi = MultiDEXHelper.from_directory("/path/to/extracted/apk/")
+```
+
+### Rust
+
+```rust
+use dex_parser::MultiDexHelper;
+use std::path::Path;
+
+let multi = MultiDexHelper::from_directory(Path::new("/path/to/dex/")).unwrap();
+println!("Loaded {} DEX files", multi.dex_count());
+
+for class in multi.classes() {
+    let c = class.unwrap();
+    println!("[{}] CLASS {}", c.source.filename, c.inner.name);
+}
+```
+
+With APK support (requires `apk` feature):
+```rust
+let multi = MultiDexHelper::from_apk(Path::new("app.apk")).unwrap();
+```
+
+### CLI
+
+```
+$ dexparser --apk app.apk          # parse all DEX files from an APK
+$ dexparser --dir /path/to/dex/    # parse all DEX files from a directory
+$ dexparser -i classes.dex          # parse a single DEX file (unchanged)
 ```
 
 ## Rust implementation
