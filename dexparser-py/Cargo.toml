@@ -1,0 +1,13 @@
+[package]
+name = "dexparser-py"
+version = "0.0.1"
+edition = "2021"
+description = "Python bindings for dex-parser (Rust DEX parser)"
+
+[lib]
+name = "dexparser_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+dex-parser = { path = "../dexparser-rs" }
+pyo3 = { version = "0.23", features = ["extension-module"] }

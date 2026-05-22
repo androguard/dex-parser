@@ -27,21 +27,25 @@ Following the "Deconstruct to Reconstruct" philosophy, dex-parser operates as a 
 - Class & Method Enumeration: Provides a clean, Pythonic API to iterate through all defined classes, their methods (both direct and virtual), and their fields.
 - On demand access for each fields by using [Hachoir library](https://github.com/vstinner/hachoir).
 - Cross-Reference Ready: Lays the groundwork for building cross-references by cleanly separating method and field definitions from their invocations.
-- Pure & Pythonic: Written in native Python with zero external dependencies for maximum portability.
+- **Rust core with Python bindings:** The parser is implemented in Rust (`dexparser-rs`) and exposed to Python via PyO3 (`dexparser-py`). Fast parsing with the same high-level API (`DEX`, `DEXHelper`).
 - [TODO] Multi-DEX Aware: Natively understands and can parse classes.dex, classes2.dex, and so on, providing a unified view of the application's code.
 
 ## Installation
 
-If you would like to install it locally, please create a new venv to use it directly, and then:
+Requires Rust (for the native extension). Use a virtual environment:
 
-```
-$ git clone https://github.com/androguard/dex-parser.git
-$ pip install -e .
+```bash
+git clone https://github.com/androguard/dex-parser.git
+cd dex-parser
+python3 -m venv .venv && source .venv/bin/activate
+pip install maturin
+maturin develop --manifest-path dexparser-py/Cargo.toml
 ```
 
-or directly via pypi:
-```
-$ pip install dexparser-ag
+Or via PyPI (when published):
+
+```bash
+pip install dexparser-ag
 ```
 
 ## Examples
@@ -54,58 +58,42 @@ $ dexparser -i Test.dex
 
 ## Usage
 
-You can open a dex file directly by using the ```DEX``` class:
-```
-from hachoir.stream.input_helper import FileInputStream
-from dexparser import DEX
+Open a DEX file with the `DEX` class (file path, bytes, or a readable stream):
 
-d = DEX(FileInputStream(arguments.input))
-```
+```python
+from dexparser import DEX, DEXHelper, DEX_from_source
 
-and use directly the raw access to each field of the DEX structure, like the header, 
-and after access to each subfields:
-```
-print(d["header"])
-print(d["headermagic/magic"].value)
+d = DEX.from_path("classes.dex")
+# or: d = DEX(bytes_data)
+# or: d = DEX_from_source(open("classes.dex", "rb"))  # legacy stream API
+
+print(d["header"])  # dict with file_size, class_defs_size, ...
 ```
 
-Main fields that are accessible are:
- - header
- - map_list
- - string_id_item
- - string_data_item
- - proto_id_item
- - type_id_item
- - method_id_item
- - field_id_item
- - class_id_item
- - class_data_item
+Use `DEXHelper` to iterate classes, methods, and fields:
 
-And so you can have access to all subfields, please see each corresponding class in the source code :)
-
-Or you can use the ```DEXHelper``` class to quickly get access to class name, method name,
-field name, but also code item for each method for disassembling:
-
-```
-from dexparser import DEXHelper
+```python
 dh = DEXHelper.from_rawdex(d)
 
+for cls in dh.get_classes():
+    print("CLASS", cls.name, cls.sname)
+
 for method in dh.get_methods():
-        print("METHOD", method, method.get_internal_struct())
-        code = method.get_code()
-        if code:
-            print(
-                "\t CODE",
-                code["debug_info_off"],
-                code["insns_size"],
-                len(code["insns"].value),
-            )
-            my_func_to_disassemble(code["insns"].value)
+    print("METHOD", method.class_name, method.name, method.proto)
+    code = method.get_code()
+    if code:
+        insns = code["insns"].value  # raw Dalvik bytecode bytes
+        print("  CODE", code.debug_info_off, code.insns_size, len(insns))
+
+for field in dh.get_fields():
+    print("FIELD", field.class_name, field.name, field.type_field)
 ```
+
+`DEXHelper.from_string(data)` parses from a `bytes` buffer directly.
 
 ## Rust implementation
 
-A pure Rust implementation lives in `dexparser-rs/`. It parses the same DEX structure and can be used without Python.
+The parser core lives in `dexparser-rs/`. Python bindings are in `dexparser-py/` (PyO3 module `dexparser_rs`). You can use the library from Rust without Python.
 
 ### Parsing flow
 

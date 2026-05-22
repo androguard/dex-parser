@@ -1,12 +1,16 @@
+[build-system]
+requires = ["maturin>=1.4,<2"]
+build-backend = "maturin"
+
 [project]
 name = "dexparser-ag"
 readme = "README.md"
 license = { file = "LICENSE" }
-keywords = ["Android, Androguard, Security"]
-description = "DEX Parser"
+keywords = ["Android", "Androguard", "Security"]
+description = "DEX Parser (Rust core with Python bindings)"
 requires-python = ">=3.10"
 authors = [{ name = "anthony", email = "ping@42.bzh" }]
-version = "0.0.1"
+dynamic = ["version"]
 
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -14,7 +18,6 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -23,24 +26,18 @@ classifiers = [
     "Topic :: Software Development",
     "Topic :: Utilities",
 ]
-dependencies = ["rich~=14.0.0", "hachoir>=3.3.0"]
 
 [project.scripts]
 dexparser = "dexparser.main:app"
 
-[build-system]
-requires = ["setuptools>=68", "setuptools_scm>=8.0"]
-build-backend = "setuptools.build_meta"
-
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["dexparser", "dexparser.*"]
-
+[tool.maturin]
+manifest-path = "dexparser-py/Cargo.toml"
+module-name = "dexparser_rs"
+python-packages = ["dexparser"]
+features = ["pyo3/extension-module"]
 
 [tool.setuptools_scm]
 version_file = "dexparser/__version__.py"
-
 
 [tool.black]
 line-length = 79
