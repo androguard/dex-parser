@@ -29,11 +29,11 @@ pub mod dex;
 
 pub use error::{DexError, Result};
 pub use dex::{
-    ClassData, ClassDef, ClassInfo, CodeItem, DexFile, DexHeader, DexHelper,
-    DexStrings, DexTypes, DexProtos, DexFields, DexMethods,
-    EncodedMethod, FieldId, FieldInfo, FieldInfoItem, FieldKind, MethodId,
-    MethodInfo, MethodInfoItem, MethodType, ProtoId,
-    DEX_MAGIC, NO_INDEX, is_dex,
+    CallSiteInfo, CallSiteValue, ClassData, ClassDef, ClassInfo, CodeItem, DebugInfo,
+    DexCallSites, DexFile, DexHeader, DexHelper, DexStrings, DexTypes, DexProtos, DexFields,
+    DexMethods, EncodedMethod, FieldId, FieldInfo, FieldInfoItem, FieldKind, MethodHandleItem,
+    MethodId, MethodInfo, MethodInfoItem, MethodType, ProtoId, DEX_MAGIC, NO_INDEX, is_dex,
+    parse_debug_info,
 };
 
 #[cfg(test)]

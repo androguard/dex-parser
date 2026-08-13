@@ -11,6 +11,8 @@ mod methods;
 mod class_def;
 mod class_data;
 mod code_item;
+mod debug_info;
+mod call_sites;
 
 pub use header::{DexHeader, DEX_MAGIC, is_dex};
 pub use strings::DexStrings;
@@ -21,41 +23,56 @@ pub use methods::{DexMethods, MethodId};
 pub use class_def::{ClassDef, NO_INDEX};
 pub use class_data::{ClassData, EncodedField, EncodedMethod};
 pub use code_item::CodeItem;
+pub use debug_info::{parse_debug_info, DebugInfo};
+pub use call_sites::{CallSiteInfo, CallSiteValue, DexCallSites, MethodHandleItem};
 
 use crate::error::Result;
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// Parsed DEX file: raw bytes + parsed indices.
+///
+/// Uses [`Arc`] so the same parse can be shared across threads (parallel
+/// decompile / taint / detectors).
 #[derive(Clone)]
 pub struct DexFile {
-    pub data: Rc<[u8]>,
+    pub data: Arc<[u8]>,
     pub header: DexHeader,
     pub strings: DexStrings,
     pub types: DexTypes,
     pub protos: DexProtos,
     pub fields: DexFields,
     pub methods: DexMethods,
+    /// DEX 038+ call sites / method handles (may be empty).
+    pub call_sites: DexCallSites,
 }
 
 impl DexFile {
     /// Parse a DEX file from raw bytes.
     pub fn parse(data: &[u8]) -> Result<Self> {
-        let data = Rc::from(data as &[u8]);
+        let data: Arc<[u8]> = Arc::from(data.to_vec().into_boxed_slice());
         let header = DexHeader::parse(&data)?;
         let strings = DexStrings::parse(&data, &header)?;
         let types = DexTypes::parse(&data, &header)?;
         let protos = DexProtos::parse(&data, &header)?;
         let fields = DexFields::parse(&data, &header)?;
         let methods = DexMethods::parse(&data, &header)?;
+        let call_sites = DexCallSites::parse(&data, &header)?;
         Ok(Self {
-            data: data.clone(),
+            data: Arc::clone(&data),
             header,
             strings,
             types,
             protos,
             fields,
             methods,
+            call_sites,
         })
+    }
+
+    /// Resolve `invoke-custom` call_site_id to structured info (if present).
+    pub fn get_call_site(&self, idx: u32) -> Result<CallSiteInfo> {
+        self.call_sites
+            .get_call_site(&*self.data, &|s| self.get_string(s), idx)
     }
 
     /// Get string by string_id index.
@@ -86,6 +103,19 @@ impl DexFile {
     /// Get code_item at file offset (from encoded_method.code_off).
     pub fn get_code_item(&self, code_off: u32) -> Result<CodeItem> {
         CodeItem::parse(&self.data, code_off)
+    }
+
+    /// Parse `debug_info_item` at the given file offset (`0` → empty).
+    pub fn get_debug_info(&self, debug_info_off: u32) -> Result<DebugInfo> {
+        if debug_info_off == 0 {
+            return Ok(DebugInfo::default());
+        }
+        parse_debug_info(&self.data, debug_info_off, &|idx| self.get_string(idx))
+    }
+
+    /// Convenience: debug info for a code_item (empty if `debug_info_off == 0`).
+    pub fn debug_info_for_code(&self, code: &CodeItem) -> Result<DebugInfo> {
+        self.get_debug_info(code.debug_info_off)
     }
 
     /// Get method info: class type, name, proto (return + params).
@@ -142,14 +172,14 @@ pub struct FieldInfo {
 /// (similar to the Python DEXHelper).
 #[derive(Clone)]
 pub struct DexHelper {
-    dex: Rc<DexFile>,
+    dex: Arc<DexFile>,
 }
 
 impl DexHelper {
     /// Create a helper from a parsed DEX file.
     pub fn from_dex(dex: &DexFile) -> Self {
         Self {
-            dex: Rc::new(dex.clone()),
+            dex: Arc::new(dex.clone()),
         }
     }
 
@@ -248,7 +278,7 @@ pub enum FieldKind {
 }
 
 struct MethodsIter {
-    dex: Rc<DexFile>,
+    dex: Arc<DexFile>,
     class_idx: u32,
     in_direct: bool,
     method_idx_in_class: u32,
@@ -334,7 +364,7 @@ impl Iterator for MethodsIter {
 }
 
 struct FieldsIter {
-    dex: Rc<DexFile>,
+    dex: Arc<DexFile>,
     class_idx: u32,
     in_static: bool,
     field_idx_in_class: u32,
