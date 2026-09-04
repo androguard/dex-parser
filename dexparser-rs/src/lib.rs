@@ -33,7 +33,7 @@ pub use dex::{
     DexCallSites, DexFile, DexHeader, DexHelper, DexStrings, DexTypes, DexProtos, DexFields,
     DexMethods, EncodedMethod, FieldId, FieldInfo, FieldInfoItem, FieldKind, MethodHandleItem,
     MethodId, MethodInfo, MethodInfoItem, MethodType, ProtoId, DEX_MAGIC, NO_INDEX, is_dex,
-    parse_debug_info,
+    parse_debug_info, fix_checksums, patch_code_insns, replace_code_insns,
 };
 
 #[cfg(test)]

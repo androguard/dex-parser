@@ -52,6 +52,29 @@ pub fn read_uleb128p1(data: &[u8], offset: usize) -> Option<(i32, usize)> {
     read_uleb128(data, offset).map(|(v, n)| (v.wrapping_sub(1) as i32, n))
 }
 
+/// Encode unsigned LEB128.
+pub fn write_uleb128(mut value: u32) -> Vec<u8> {
+    let mut out = Vec::new();
+    loop {
+        let mut byte = (value & 0x7f) as u8;
+        value >>= 7;
+        if value != 0 {
+            byte |= 0x80;
+        }
+        out.push(byte);
+        if value == 0 {
+            break;
+        }
+    }
+    out
+}
+
+/// Write u32 little-endian at offset.
+#[inline]
+pub fn write_u32(data: &mut [u8], offset: usize, value: u32) {
+    data[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+}
+
 /// Read u16 little-endian at offset.
 #[inline]
 pub fn read_u16(data: &[u8], offset: usize) -> Option<u16> {

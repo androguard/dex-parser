@@ -11,7 +11,8 @@ authors = ["anthony <ping@42.bzh>"]
 [dependencies]
 thiserror = "1.0"
 clap = { version = "4", features = ["derive"] }
-dex-bytecode = { git = "https://github.com/androguard/dex-bytecode.git", optional = true }
+sha1 = "0.10"
+dex-bytecode = { path = "../../dex-bytecode/dex-bytecode", optional = true }
 
 [[bin]]
 name = "dexparser"

@@ -13,6 +13,7 @@ mod class_data;
 mod code_item;
 mod debug_info;
 mod call_sites;
+mod write;
 
 pub use header::{DexHeader, DEX_MAGIC, is_dex};
 pub use strings::DexStrings;
@@ -25,6 +26,7 @@ pub use class_data::{ClassData, EncodedField, EncodedMethod};
 pub use code_item::CodeItem;
 pub use debug_info::{parse_debug_info, DebugInfo};
 pub use call_sites::{CallSiteInfo, CallSiteValue, DexCallSites, MethodHandleItem};
+pub use write::{fix_checksums, patch_code_insns, replace_code_insns};
 
 use crate::error::Result;
 use std::sync::Arc;
