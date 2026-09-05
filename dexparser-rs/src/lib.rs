@@ -29,10 +29,16 @@ pub mod dex;
 
 pub use error::{DexError, Result};
 pub use dex::{
-    CallSiteInfo, CallSiteValue, ClassData, ClassDef, ClassInfo, CodeItem, DebugInfo,
-    DexCallSites, DexFile, DexHeader, DexHelper, DexStrings, DexTypes, DexProtos, DexFields,
-    DexMethods, EncodedMethod, FieldId, FieldInfo, FieldInfoItem, FieldKind, MethodHandleItem,
-    MethodId, MethodInfo, MethodInfoItem, MethodType, ProtoId, DEX_MAGIC, NO_INDEX, is_dex,
+    build_debug_info, build_simple_debug, escape_string_literal, format_value_literal,
+    format_value_literal_full, parse_annotations_directory, parse_value_literal, parse_visibility,
+    simple_annotation, unescape_string_content, unquote_string_literal,
+    visibility_name, write_annotations_directory, AnnotationItem, AnnotationsDirectory,
+    CallSiteInfo, CallSiteValue, ClassData, ClassDef, ClassInfo, CodeItem, DebugBuilderOp,
+    DebugInfo, DexBuilder, DexCallSites, DexFile, DexHeader, DexHelper, DexStrings, DexTypes,
+    DexProtos, DexFields, DexMethods, EncodedAnnotation, EncodedMethod, EncodedValue, FieldId,
+    FieldInfo, FieldInfoItem, FieldKind, MethodHandleItem, MethodId, MethodInfo, MethodInfoItem,
+    MethodType, BuiltClass, BuiltCode, BuiltField, BuiltMethod, BuiltTry, PoolMaps, ProtoId,
+    TryItem, VISIBILITY_BUILD, VISIBILITY_RUNTIME, VISIBILITY_SYSTEM, DEX_MAGIC, NO_INDEX, is_dex,
     parse_debug_info, fix_checksums, patch_code_insns, replace_code_insns,
 };
 

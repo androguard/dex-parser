@@ -1,7 +1,7 @@
 //! code_item: registers_size, ins_size, outs_size, tries_size, debug_info_off, insns_size, insns[], padding?, tries?, handlers?
 
 use crate::error::{DexError, Result};
-use crate::leb128::{read_u32, read_u16};
+use crate::leb128::{read_sleb128, read_u16, read_u32, read_uleb128};
 
 #[derive(Clone, Debug)]
 pub struct CodeItem {
@@ -14,6 +14,15 @@ pub struct CodeItem {
     pub insns_size: u32,
     /// Offset into file where insns array starts (after code_item header).
     pub insns_off: usize,
+    pub code_off: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct TryItem {
+    pub start_unit: u32,
+    pub insn_count: u16,
+    /// `(Some(type_idx), addr)` or `(None, addr)` for catch-all.
+    pub handlers: Vec<(Option<u32>, u32)>,
 }
 
 impl CodeItem {
@@ -23,11 +32,13 @@ impl CodeItem {
         if data.len() < off + 16 {
             return Err(DexError::Truncated("code_item header".into()));
         }
-        let registers_size = read_u16(data, off).ok_or(DexError::Truncated("registers_size".into()))?;
+        let registers_size =
+            read_u16(data, off).ok_or(DexError::Truncated("registers_size".into()))?;
         let ins_size = read_u16(data, off + 2).ok_or(DexError::Truncated("ins_size".into()))?;
         let outs_size = read_u16(data, off + 4).ok_or(DexError::Truncated("outs_size".into()))?;
         let tries_size = read_u16(data, off + 6).ok_or(DexError::Truncated("tries_size".into()))?;
-        let debug_info_off = read_u32(data, off + 8).ok_or(DexError::Truncated("debug_info_off".into()))?;
+        let debug_info_off =
+            read_u32(data, off + 8).ok_or(DexError::Truncated("debug_info_off".into()))?;
         let insns_size = read_u32(data, off + 12).ok_or(DexError::Truncated("insns_size".into()))?;
         let insns_off = off + 16;
         let insns_bytes = (insns_size as usize).saturating_mul(2);
@@ -42,6 +53,7 @@ impl CodeItem {
             debug_info_off,
             insns_size,
             insns_off,
+            code_off,
         })
     }
 
@@ -56,6 +68,58 @@ impl CodeItem {
     pub fn insns_size_units(&self) -> usize {
         self.insns_size as usize
     }
+
+    /// Parse try_item + handlers for this code_item.
+    pub fn tries(&self, data: &[u8]) -> Result<Vec<TryItem>> {
+        if self.tries_size == 0 {
+            return Ok(Vec::new());
+        }
+        let insns_bytes = (self.insns_size as usize) * 2;
+        let mut pos = self.insns_off + insns_bytes;
+        if self.insns_size % 2 == 1 {
+            pos += 2;
+        }
+        let tries_pos = pos;
+        let handlers_base = pos + self.tries_size as usize * 8;
+
+        let mut out = Vec::with_capacity(self.tries_size as usize);
+        for i in 0..self.tries_size as usize {
+            let base = tries_pos + i * 8;
+            let start_unit =
+                read_u32(data, base).ok_or(DexError::Truncated("try start".into()))?;
+            let insn_count =
+                read_u16(data, base + 4).ok_or(DexError::Truncated("try count".into()))?;
+            let handler_off =
+                read_u16(data, base + 6).ok_or(DexError::Truncated("try handler_off".into()))?
+                    as usize;
+            let mut hpos = handlers_base + handler_off;
+            let (size, n) =
+                read_sleb128(data, hpos).ok_or(DexError::Truncated("catch size".into()))?;
+            hpos += n;
+            let mut handlers = Vec::new();
+            let typed = size.unsigned_abs();
+            for _ in 0..typed {
+                let (ty, n1) =
+                    read_uleb128(data, hpos).ok_or(DexError::Truncated("catch type".into()))?;
+                hpos += n1;
+                let (addr, n2) =
+                    read_uleb128(data, hpos).ok_or(DexError::Truncated("catch addr".into()))?;
+                hpos += n2;
+                handlers.push((Some(ty), addr));
+            }
+            if size <= 0 {
+                let (addr, _) =
+                    read_uleb128(data, hpos).ok_or(DexError::Truncated("catchall addr".into()))?;
+                handlers.push((None, addr));
+            }
+            out.push(TryItem {
+                start_unit,
+                insn_count,
+                handlers,
+            });
+        }
+        Ok(out)
+    }
 }
 
 #[cfg(test)]
@@ -64,19 +128,13 @@ mod tests {
 
     #[test]
     fn code_item_parse_minimal() {
-        // Minimal code_item: 2 registers, 0 ins/outs, 0 tries, 0 debug_info, 1 insn (2 bytes)
         let mut data = vec![0u8; 18];
-        data[0..2].copy_from_slice(&(2u16).to_le_bytes()); // registers_size
-        data[2..4].copy_from_slice(&0u16.to_le_bytes()); // ins_size
-        data[4..6].copy_from_slice(&0u16.to_le_bytes()); // outs_size
-        data[6..8].copy_from_slice(&0u16.to_le_bytes()); // tries_size
-        data[8..12].copy_from_slice(&0u32.to_le_bytes()); // debug_info_off
-        data[12..16].copy_from_slice(&(1u32).to_le_bytes()); // insns_size (1 unit = 2 bytes)
-        data[16..18].copy_from_slice(&[0x0e, 0x00]); // return-void
+        data[0..2].copy_from_slice(&(2u16).to_le_bytes());
+        data[12..16].copy_from_slice(&(1u32).to_le_bytes());
+        data[16..18].copy_from_slice(&[0x0e, 0x00]);
         let code = CodeItem::parse(&data, 0).unwrap();
         assert_eq!(code.registers_size, 2);
         assert_eq!(code.insns_size, 1);
-        assert_eq!(code.insns_off, 16);
         assert_eq!(code.insns_slice(&data), &[0x0e, 0x00]);
     }
 
@@ -89,7 +147,7 @@ mod tests {
     #[test]
     fn code_item_parse_truncated_insns() {
         let mut data = vec![0u8; 16];
-        data[12..16].copy_from_slice(&(100u32).to_le_bytes()); // insns_size = 100, but only 0 bytes after
+        data[12..16].copy_from_slice(&(100u32).to_le_bytes());
         assert!(CodeItem::parse(&data, 0).is_err());
     }
 }

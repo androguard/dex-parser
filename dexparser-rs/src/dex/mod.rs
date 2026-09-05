@@ -14,6 +14,9 @@ mod code_item;
 mod debug_info;
 mod call_sites;
 mod write;
+mod build;
+mod encoded_value;
+mod annotations;
 
 pub use header::{DexHeader, DEX_MAGIC, is_dex};
 pub use strings::DexStrings;
@@ -23,12 +26,26 @@ pub use fields::{DexFields, FieldId};
 pub use methods::{DexMethods, MethodId};
 pub use class_def::{ClassDef, NO_INDEX};
 pub use class_data::{ClassData, EncodedField, EncodedMethod};
-pub use code_item::CodeItem;
+pub use code_item::{CodeItem, TryItem};
 pub use debug_info::{parse_debug_info, DebugInfo};
 pub use call_sites::{CallSiteInfo, CallSiteValue, DexCallSites, MethodHandleItem};
 pub use write::{fix_checksums, patch_code_insns, replace_code_insns};
+pub use build::{
+    build_debug_info, build_simple_debug, BuiltClass, BuiltCode, BuiltField, BuiltMethod, BuiltTry,
+    DebugBuilderOp, DexBuilder, PoolMaps,
+};
+pub use encoded_value::{
+    decode_encoded_array, decode_encoded_value, encode_encoded_array, encode_encoded_value,
+    format_value_literal, format_value_literal_full, parse_value_literal, escape_string_literal, unescape_string_content, unquote_string_literal, EncodedAnnotation,
+    EncodedValue,
+};
+pub use annotations::{
+    parse_annotations_directory, parse_visibility, simple_annotation, visibility_name,
+    write_annotations_directory, AnnotationItem, AnnotationsDirectory, VISIBILITY_BUILD,
+    VISIBILITY_RUNTIME, VISIBILITY_SYSTEM,
+};
 
-use crate::error::Result;
+use crate::error::{DexError, Result};
 use std::sync::Arc;
 
 /// Parsed DEX file: raw bytes + parsed indices.
@@ -100,6 +117,47 @@ impl DexFile {
     /// Get class_data for a class_def (static/instance fields, direct/virtual methods).
     pub fn get_class_data(&self, class_def: &ClassDef) -> Result<Option<ClassData>> {
         ClassData::parse(&self.data, class_def)
+    }
+
+    /// Interface type descriptors for a class (`interfaces_off` type_list).
+    pub fn get_interfaces(&self, class_def: &ClassDef) -> Result<Vec<String>> {
+        if class_def.interfaces_off == 0 {
+            return Ok(Vec::new());
+        }
+        let off = class_def.interfaces_off as usize;
+        if off + 4 > self.data.len() {
+            return Err(DexError::Truncated("interfaces type_list".into()));
+        }
+        let size = crate::leb128::read_u32(&self.data, off).unwrap_or(0) as usize;
+        let mut out = Vec::with_capacity(size);
+        for i in 0..size {
+            let idx = crate::leb128::read_u16(&self.data, off + 4 + i * 2).unwrap_or(0) as u32;
+            out.push(self.get_type(idx)?);
+        }
+        Ok(out)
+    }
+
+    /// Annotations directory for a class (empty if none).
+    pub fn get_annotations(
+        &self,
+        class_def: &ClassDef,
+    ) -> Result<crate::dex::annotations::AnnotationsDirectory> {
+        crate::dex::annotations::parse_annotations_directory(&self.data, class_def.annotations_off)
+    }
+
+    /// Static field initializers (`encoded_array` at static_values_off).
+    pub fn get_static_values(
+        &self,
+        class_def: &ClassDef,
+    ) -> Result<Vec<crate::dex::encoded_value::EncodedValue>> {
+        if class_def.static_values_off == 0 {
+            return Ok(Vec::new());
+        }
+        let (vals, _) = crate::dex::encoded_value::decode_encoded_array(
+            &self.data,
+            class_def.static_values_off as usize,
+        )?;
+        Ok(vals)
     }
 
     /// Get code_item at file offset (from encoded_method.code_off).

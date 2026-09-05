@@ -69,6 +69,29 @@ pub fn write_uleb128(mut value: u32) -> Vec<u8> {
     out
 }
 
+/// Encode signed LEB128.
+pub fn write_sleb128(mut value: i32) -> Vec<u8> {
+    let mut out = Vec::new();
+    loop {
+        let mut byte = (value as u32 & 0x7f) as u8;
+        value >>= 7;
+        let done = (value == 0 && (byte & 0x40) == 0) || (value == -1 && (byte & 0x40) != 0);
+        if !done {
+            byte |= 0x80;
+        }
+        out.push(byte);
+        if done {
+            break;
+        }
+    }
+    out
+}
+
+/// Encode uleb128p1: stores `(value + 1)` as uleb128. `-1` → `0`.
+pub fn write_uleb128p1(value: i32) -> Vec<u8> {
+    write_uleb128((value as u32).wrapping_add(1))
+}
+
 /// Write u32 little-endian at offset.
 #[inline]
 pub fn write_u32(data: &mut [u8], offset: usize, value: u32) {

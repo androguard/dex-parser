@@ -172,7 +172,9 @@ fn adjust_file_offsets(dex: &mut [u8], from: usize, delta: i64) -> Result<()> {
     }
 
     adjust_debug_info_offs(dex, &header, &adjust)?;
-    adjust_map_list(dex, header.map_off, adjust)?;
+    if header.map_off != 0 {
+        adjust_map_list(dex, header.map_off, adjust)?;
+    }
     Ok(())
 }
 
@@ -334,7 +336,7 @@ mod tests {
         let insns_size = (insns.len() / 2) as u32;
         let code_item_len = 16 + insns.len();
         let data_off = 0x70u32;
-        let file_size = data_off + code_item_len;
+        let file_size = data_off + code_item_len as u32;
         let mut data = vec![0u8; file_size as usize];
         data[0..4].copy_from_slice(&[0x64, 0x65, 0x78, 0x0a]);
         data[4..8].copy_from_slice(b"035\0");
