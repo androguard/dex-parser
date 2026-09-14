@@ -47,8 +47,37 @@ impl DexStrings {
     }
 }
 
+/// Encode a Rust `&str` to MUTF-8 bytes (no trailing NUL).
+pub fn encode_mutf8(s: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(s.len());
+    for ch in s.chars() {
+        let cp = ch as u32;
+        if cp != 0 && cp <= 0x7f {
+            out.push(cp as u8);
+        } else if cp <= 0x7ff {
+            out.push((0xc0 | ((cp >> 6) & 0x1f)) as u8);
+            out.push((0x80 | (cp & 0x3f)) as u8);
+        } else if cp <= 0xffff {
+            out.push((0xe0 | ((cp >> 12) & 0x0f)) as u8);
+            out.push((0x80 | ((cp >> 6) & 0x3f)) as u8);
+            out.push((0x80 | (cp & 0x3f)) as u8);
+        } else {
+            // Supplementary plane → UTF-16 surrogate pair in MUTF-8
+            let cp2 = cp - 0x10000;
+            let high = 0xd800 + ((cp2 >> 10) & 0x3ff);
+            let low = 0xdc00 + (cp2 & 0x3ff);
+            for half in [high, low] {
+                out.push((0xe0 | ((half >> 12) & 0x0f)) as u8);
+                out.push((0x80 | ((half >> 6) & 0x3f)) as u8);
+                out.push((0x80 | (half & 0x3f)) as u8);
+            }
+        }
+    }
+    out
+}
+
 /// Decode MUTF-8 to String. Handles 1/2/3 byte sequences and surrogate pairs.
-fn decode_mutf8(bytes: &[u8]) -> std::result::Result<String, String> {
+pub fn decode_mutf8(bytes: &[u8]) -> std::result::Result<String, String> {
     let mut out = String::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {

@@ -12,6 +12,9 @@ pub enum DexError {
 
     #[error("Truncated or out of bounds: {0}")]
     Truncated(String),
+
+    #[error("slice unsupported ref (invoke-custom / method-handle)")]
+    UnsupportedRef,
 }
 
 pub type Result<T> = std::result::Result<T, DexError>;

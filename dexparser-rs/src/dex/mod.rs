@@ -17,9 +17,15 @@ mod write;
 mod build;
 mod encoded_value;
 mod annotations;
+pub mod raw;
+pub mod fastref;
+pub mod slice;
 
 pub use header::{DexHeader, DEX_MAGIC, is_dex};
-pub use strings::DexStrings;
+pub use strings::{decode_mutf8, encode_mutf8, DexStrings};
+pub use raw::RawDex;
+pub use fastref::{dex_defines_class, FastRef, MemberQuery, RefSite};
+pub use slice::DexSlicer;
 pub use types::DexTypes;
 pub use protos::{DexProtos, ProtoId};
 pub use fields::{DexFields, FieldId};

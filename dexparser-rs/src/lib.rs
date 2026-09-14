@@ -40,6 +40,7 @@ pub use dex::{
     MethodType, BuiltClass, BuiltCode, BuiltField, BuiltMethod, BuiltTry, PoolMaps, ProtoId,
     TryItem, VISIBILITY_BUILD, VISIBILITY_RUNTIME, VISIBILITY_SYSTEM, DEX_MAGIC, NO_INDEX, is_dex,
     parse_debug_info, fix_checksums, patch_code_insns, replace_code_insns,
+    encode_mutf8, RawDex, FastRef, MemberQuery, RefSite, dex_defines_class, DexSlicer,
 };
 
 #[cfg(test)]

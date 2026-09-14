@@ -9,10 +9,11 @@ keywords = ["android", "dex", "parser", "androguard"]
 authors = ["anthony <ping@42.bzh>"]
 
 [dependencies]
+dex-bytecode = { path = "../../dex-bytecode/dex-bytecode" }
 thiserror = "1.0"
 clap = { version = "4", features = ["derive"] }
 sha1 = "0.10"
-dex-bytecode = { path = "../../dex-bytecode/dex-bytecode", optional = true }
+memchr = "2"
 
 [[bin]]
 name = "dexparser"
@@ -24,8 +25,7 @@ path = "src/bin/dexparse_dir.rs"
 
 [features]
 default = []
-disasm = ["dep:dex-bytecode"]
-
+disasm = []
 [dev-dependencies]
 # optional: for tests with minimal DEX bytes
 # none required for now
