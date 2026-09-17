@@ -9,7 +9,7 @@ keywords = ["android", "dex", "parser", "androguard"]
 authors = ["anthony <ping@42.bzh>"]
 
 [dependencies]
-dex-bytecode = { path = "../../dex-bytecode/dex-bytecode" }
+dex-bytecode = { git = "https://github.com/androguard/dex-bytecode.git" }
 thiserror = "1.0"
 clap = { version = "4", features = ["derive"] }
 sha1 = "0.10"
