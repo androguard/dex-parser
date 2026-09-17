@@ -163,6 +163,7 @@ dependencies = [
 [[package]]
 name = "dex-bytecode"
 version = "0.0.1"
+source = "git+https://github.com/androguard/dex-bytecode.git#847090298e79c22b0572fca82b1ee5316d6ee57e"
 dependencies = [
  "clap",
  "colored 2.2.0",

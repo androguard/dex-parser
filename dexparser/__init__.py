@@ -4,9 +4,13 @@ from dexparser_rs import (
     ClassHelper,
     DEX as _RustDEX,
     DEXHelper,
+    FastRef,
     FieldHelper,
     MethodHelper,
+    RefSite,
+    dex_defines_class,
     is_dex,
+    slice_class,
 )
 
 __all__ = [
@@ -15,7 +19,11 @@ __all__ = [
     "ClassHelper",
     "MethodHelper",
     "FieldHelper",
+    "FastRef",
+    "RefSite",
     "is_dex",
+    "dex_defines_class",
+    "slice_class",
     "DEX_from_source",
 ]
 

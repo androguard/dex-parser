@@ -4,7 +4,7 @@ use crate::dex::encoded_value::{
     decode_encoded_annotation, encode_encoded_annotation, EncodedAnnotation, EncodedValue,
 };
 use crate::error::{DexError, Result};
-use crate::leb128::{read_u32, write_uleb128};
+use crate::leb128::read_u32;
 
 pub const VISIBILITY_BUILD: u8 = 0x00;
 pub const VISIBILITY_RUNTIME: u8 = 0x01;

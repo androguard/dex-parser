@@ -361,6 +361,131 @@ fn is_dex(data: &[u8]) -> bool {
     dex_parser::is_dex(data)
 }
 
+/// True if this DEX **defines** `descriptor` (Dalvik form, e.g. `Lcom/foo/Bar;`).
+#[pyfunction]
+fn dex_defines_class(data: &[u8], descriptor: &str) -> bool {
+    dex_parser::dex_defines_class(data, descriptor)
+}
+
+/// Slice a minimal, spec-valid DEX containing only `descriptor`.
+#[pyfunction]
+fn slice_class(data: &[u8], descriptor: &str) -> PyResult<Vec<u8>> {
+    let slicer = dex_parser::DexSlicer::new(data).map_err(dex_err)?;
+    slicer.slice_class(descriptor).map_err(dex_err)
+}
+
+/// One verified reference site from the ASC fast path.
+#[pyclass(name = "RefSite")]
+#[derive(Clone)]
+struct PyRefSite {
+    #[pyo3(get)]
+    file_off: u32,
+    #[pyo3(get)]
+    pool_idx: u32,
+    #[pyo3(get)]
+    method_idx: u32,
+}
+
+#[pymethods]
+impl PyRefSite {
+    fn __repr__(&self) -> String {
+        format!(
+            "RefSite(method_idx={}, pool_idx={}, file_off=0x{:x})",
+            self.method_idx, self.pool_idx, self.file_off
+        )
+    }
+}
+
+fn sites_to_py(sites: Vec<dex_parser::RefSite>) -> Vec<PyRefSite> {
+    sites
+        .into_iter()
+        .map(|s| PyRefSite {
+            file_off: s.file_off,
+            pool_idx: s.pool_idx,
+            method_idx: s.method_idx,
+        })
+        .collect()
+}
+
+/// ASC-style findrefs manager over raw DEX bytes.
+#[pyclass(name = "FastRef", unsendable)]
+struct PyFastRef {
+    data: Vec<u8>,
+}
+
+#[pymethods]
+impl PyFastRef {
+    #[new]
+    fn new(data: Vec<u8>) -> PyResult<Self> {
+        // Validate we can build FastRef once.
+        let _ = dex_parser::FastRef::new(&data).map_err(dex_err)?;
+        Ok(Self { data })
+    }
+
+    #[classmethod]
+    fn from_path(_cls: &Bound<'_, PyType>, path: String) -> PyResult<Self> {
+        let data = fs::read(&path).map_err(|e| PyIOError::new_err(e.to_string()))?;
+        Self::new(data)
+    }
+
+    /// Sites referencing strings that contain `needle`.
+    fn find_strings(&self, needle: &str) -> PyResult<Vec<PyRefSite>> {
+        let mut fr = dex_parser::FastRef::new(&self.data).map_err(dex_err)?;
+        Ok(sites_to_py(fr.find_strings(needle).map_err(dex_err)?))
+    }
+
+    /// Sites referencing types whose descriptor contains `needle`.
+    fn find_types(&self, needle: &str) -> PyResult<Vec<PyRefSite>> {
+        let mut fr = dex_parser::FastRef::new(&self.data).map_err(dex_err)?;
+        Ok(sites_to_py(fr.find_types(needle).map_err(dex_err)?))
+    }
+
+    /// Sites referencing methods matching optional class + name.
+    ///
+    /// `class_name` is Dalvik form (`Lcom/foo/Bar;`). When `exact_class` is False,
+    /// class matching is substring/fuzzy.
+    #[pyo3(signature = (class_name=None, method_name=None, exact_class=true))]
+    fn find_methods(
+        &self,
+        class_name: Option<String>,
+        method_name: Option<String>,
+        exact_class: bool,
+    ) -> PyResult<Vec<PyRefSite>> {
+        let mut fr = dex_parser::FastRef::new(&self.data).map_err(dex_err)?;
+        let q = dex_parser::MemberQuery {
+            class: class_name.map(|c| (c, exact_class)),
+            name: method_name,
+        };
+        Ok(sites_to_py(fr.find_methods(&q).map_err(dex_err)?))
+    }
+
+    /// Sites referencing fields matching optional class + name.
+    #[pyo3(signature = (class_name=None, field_name=None, exact_class=true))]
+    fn find_fields(
+        &self,
+        class_name: Option<String>,
+        field_name: Option<String>,
+        exact_class: bool,
+    ) -> PyResult<Vec<PyRefSite>> {
+        let mut fr = dex_parser::FastRef::new(&self.data).map_err(dex_err)?;
+        let q = dex_parser::MemberQuery {
+            class: class_name.map(|c| (c, exact_class)),
+            name: field_name,
+        };
+        Ok(sites_to_py(fr.find_fields(&q).map_err(dex_err)?))
+    }
+
+    /// Sites that invoke / reference a specific `method_ids` index.
+    fn find_method_idx(&self, method_idx: u32) -> PyResult<Vec<PyRefSite>> {
+        let mut fr = dex_parser::FastRef::new(&self.data).map_err(dex_err)?;
+        Ok(sites_to_py(fr.find_method_idx(method_idx).map_err(dex_err)?))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("FastRef(len={})", self.data.len())
+    }
+}
+
 #[pymodule]
 fn dexparser_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDexFile>()?;
@@ -369,6 +494,10 @@ fn dexparser_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMethodHelper>()?;
     m.add_class::<PyFieldHelper>()?;
     m.add_class::<PyCodeItem>()?;
+    m.add_class::<PyFastRef>()?;
+    m.add_class::<PyRefSite>()?;
     m.add_function(wrap_pyfunction!(is_dex, m)?)?;
+    m.add_function(wrap_pyfunction!(dex_defines_class, m)?)?;
+    m.add_function(wrap_pyfunction!(slice_class, m)?)?;
     Ok(())
 }
