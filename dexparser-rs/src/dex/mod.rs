@@ -33,7 +33,7 @@ pub use methods::{DexMethods, MethodId};
 pub use class_def::{ClassDef, NO_INDEX};
 pub use class_data::{ClassData, EncodedField, EncodedMethod};
 pub use code_item::{CodeItem, TryItem};
-pub use debug_info::{parse_debug_info, DebugInfo};
+pub use debug_info::{parse_debug_info, parse_debug_info_with_types, DebugInfo, DebugLocal};
 pub use call_sites::{CallSiteInfo, CallSiteValue, DexCallSites, MethodHandleItem};
 pub use write::{fix_checksums, patch_code_insns, replace_code_insns};
 pub use build::{
@@ -176,7 +176,12 @@ impl DexFile {
         if debug_info_off == 0 {
             return Ok(DebugInfo::default());
         }
-        parse_debug_info(&self.data, debug_info_off, &|idx| self.get_string(idx))
+        parse_debug_info_with_types(
+            &self.data,
+            debug_info_off,
+            &|idx| self.get_string(idx),
+            Some(&|idx| self.get_type(idx)),
+        )
     }
 
     /// Convenience: debug info for a code_item (empty if `debug_info_off == 0`).

@@ -17,6 +17,14 @@ const DBG_SET_PROLOGUE_END: u8 = 0x07;
 const DBG_SET_EPILOGUE_BEGIN: u8 = 0x08;
 const DBG_SET_FILE: u8 = 0x09;
 
+/// One `DBG_START_LOCAL` / restart entry (register may host several over the method).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DebugLocal {
+    pub name: String,
+    /// DEX type descriptor when present (e.g. `F`, `D`, `Ljava/lang/String;`).
+    pub type_desc: Option<String>,
+}
+
 /// Parsed debug information for one method.
 #[derive(Clone, Debug, Default)]
 pub struct DebugInfo {
@@ -25,12 +33,29 @@ pub struct DebugInfo {
     pub parameter_names: Vec<Option<String>>,
     /// Best known local name per register (from START_LOCAL / RESTART_LOCAL).
     pub register_names: HashMap<u32, String>,
+    /// Best known local type descriptor per register (e.g. `F`, `D`, `Ljava/lang/String;`).
+    pub register_types: HashMap<u32, String>,
+    /// All locals that lived on each register, in debug order (handles D8 reuse).
+    pub register_locals: HashMap<u32, Vec<DebugLocal>>,
 }
 
 impl DebugInfo {
     /// Name for register `reg`, if known.
     pub fn name_for_reg(&self, reg: u32) -> Option<&str> {
         self.register_names.get(&reg).map(|s| s.as_str())
+    }
+
+    /// Type descriptor for register `reg`, if known.
+    pub fn type_for_reg(&self, reg: u32) -> Option<&str> {
+        self.register_types.get(&reg).map(|s| s.as_str())
+    }
+
+    /// Every named local that lived on `reg`, in encounter order.
+    pub fn locals_for_reg(&self, reg: u32) -> &[DebugLocal] {
+        self.register_locals
+            .get(&reg)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 }
 
@@ -42,6 +67,16 @@ pub fn parse_debug_info(
     data: &[u8],
     debug_info_off: u32,
     get_string: &dyn Fn(u32) -> Result<String>,
+) -> Result<DebugInfo> {
+    parse_debug_info_with_types(data, debug_info_off, get_string, None)
+}
+
+/// Like [`parse_debug_info`], but also resolves local type descriptors when `get_type` is set.
+pub fn parse_debug_info_with_types(
+    data: &[u8],
+    debug_info_off: u32,
+    get_string: &dyn Fn(u32) -> Result<String>,
+    get_type: Option<&dyn Fn(u32) -> Result<String>>,
 ) -> Result<DebugInfo> {
     let mut off = debug_info_off as usize;
     if off >= data.len() {
@@ -70,8 +105,41 @@ pub fn parse_debug_info(
 
     let mut address: u32 = 0;
     let mut register_names: HashMap<u32, String> = HashMap::new();
+    let mut register_types: HashMap<u32, String> = HashMap::new();
+    let mut register_locals: HashMap<u32, Vec<DebugLocal>> = HashMap::new();
     // Remember last ended local so RESTART_LOCAL can revive it.
     let mut last_local: HashMap<u32, String> = HashMap::new();
+    let mut last_type: HashMap<u32, String> = HashMap::new();
+
+    let push_local = |reg: u32,
+                      name: Option<String>,
+                      ty: Option<String>,
+                      register_names: &mut HashMap<u32, String>,
+                      register_types: &mut HashMap<u32, String>,
+                      register_locals: &mut HashMap<u32, Vec<DebugLocal>>,
+                      last_local: &mut HashMap<u32, String>,
+                      last_type: &mut HashMap<u32, String>| {
+        if let Some(ref n) = name {
+            if !n.is_empty() {
+                last_local.insert(reg, n.clone());
+                register_names.insert(reg, n.clone());
+            }
+        }
+        if let Some(ref t) = ty {
+            if !t.is_empty() {
+                last_type.insert(reg, t.clone());
+                register_types.insert(reg, t.clone());
+            }
+        }
+        if let Some(n) = name {
+            if !n.is_empty() {
+                register_locals.entry(reg).or_default().push(DebugLocal {
+                    name: n,
+                    type_desc: ty.filter(|t| !t.is_empty()),
+                });
+            }
+        }
+    };
 
     loop {
         if off >= data.len() {
@@ -99,7 +167,7 @@ pub fn parse_debug_info(
                 let (name_idx_p1, n) = read_uleb128p1(data, off)
                     .ok_or(DexError::Truncated("DBG_START_LOCAL name".into()))?;
                 off += n;
-                let (_type_idx_p1, n) = read_uleb128p1(data, off)
+                let (type_idx_p1, n) = read_uleb128p1(data, off)
                     .ok_or(DexError::Truncated("DBG_START_LOCAL type".into()))?;
                 off += n;
                 if opcode == DBG_START_LOCAL_EXTENDED {
@@ -107,14 +175,26 @@ pub fn parse_debug_info(
                         .ok_or(DexError::Truncated("DBG_START_LOCAL_EXTENDED sig".into()))?;
                     off += n;
                 }
-                if name_idx_p1 >= 0 {
-                    if let Ok(name) = get_string(name_idx_p1 as u32) {
-                        if !name.is_empty() {
-                            last_local.insert(reg, name.clone());
-                            register_names.insert(reg, name);
-                        }
-                    }
-                }
+                let name = if name_idx_p1 >= 0 {
+                    get_string(name_idx_p1 as u32).ok()
+                } else {
+                    None
+                };
+                let ty = if type_idx_p1 >= 0 {
+                    get_type.and_then(|gt| gt(type_idx_p1 as u32).ok())
+                } else {
+                    None
+                };
+                push_local(
+                    reg,
+                    name,
+                    ty,
+                    &mut register_names,
+                    &mut register_types,
+                    &mut register_locals,
+                    &mut last_local,
+                    &mut last_type,
+                );
                 let _ = address;
             }
             DBG_END_LOCAL => {
@@ -125,13 +205,27 @@ pub fn parse_debug_info(
                 if let Some(name) = register_names.get(&reg).cloned() {
                     last_local.insert(reg, name);
                 }
+                if let Some(ty) = register_types.get(&reg).cloned() {
+                    last_type.insert(reg, ty);
+                }
             }
             DBG_RESTART_LOCAL => {
                 let (reg, n) = read_uleb128(data, off)
                     .ok_or(DexError::Truncated("DBG_RESTART_LOCAL".into()))?;
                 off += n;
-                if let Some(name) = last_local.get(&reg).cloned() {
-                    register_names.insert(reg, name);
+                let name = last_local.get(&reg).cloned();
+                let ty = last_type.get(&reg).cloned();
+                if name.is_some() || ty.is_some() {
+                    push_local(
+                        reg,
+                        name,
+                        ty,
+                        &mut register_names,
+                        &mut register_types,
+                        &mut register_locals,
+                        &mut last_local,
+                        &mut last_type,
+                    );
                 }
             }
             DBG_SET_PROLOGUE_END | DBG_SET_EPILOGUE_BEGIN => {}
@@ -157,6 +251,8 @@ pub fn parse_debug_info(
         line_start,
         parameter_names,
         register_names,
+        register_types,
+        register_locals,
     })
 }
 
@@ -195,5 +291,33 @@ mod tests {
         let dbg = parse_debug_info(&data, 0, &get_string).unwrap();
         assert_eq!(dbg.parameter_names, vec![Some("count".into())]);
         assert_eq!(dbg.name_for_reg(1), Some("count"));
+    }
+
+    #[test]
+    fn parse_start_local_with_type() {
+        let mut data = Vec::new();
+        data.push(0x01);
+        data.push(0x00);
+        data.push(DBG_START_LOCAL);
+        data.push(0x02); // reg 2
+        data.push(0x01); // name string 0
+        data.push(0x01); // type_idx 0
+        data.push(DBG_END_SEQUENCE);
+        let get_string = |idx: u32| -> Result<String> {
+            match idx {
+                0 => Ok("fff".into()),
+                _ => Err(DexError::Parse(format!("string {idx}"))),
+            }
+        };
+        let get_type = |idx: u32| -> Result<String> {
+            match idx {
+                0 => Ok("F".into()),
+                _ => Err(DexError::Parse(format!("type {idx}"))),
+            }
+        };
+        let dbg =
+            parse_debug_info_with_types(&data, 0, &get_string, Some(&get_type)).unwrap();
+        assert_eq!(dbg.name_for_reg(2), Some("fff"));
+        assert_eq!(dbg.type_for_reg(2), Some("F"));
     }
 }
