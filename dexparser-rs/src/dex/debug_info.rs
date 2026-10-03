@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use crate::bounds::{ensure_count_fits, vec_with_capacity};
 use crate::error::{DexError, Result};
 use crate::leb128::{read_sleb128, read_uleb128, read_uleb128p1};
 
@@ -90,7 +91,9 @@ pub fn parse_debug_info_with_types(
         read_uleb128(data, off).ok_or(DexError::Truncated("debug parameters_size".into()))?;
     off += n;
 
-    let mut parameter_names = Vec::with_capacity(parameters_size as usize);
+    let parameters_size = parameters_size as usize;
+    ensure_count_fits(parameters_size, data.len().saturating_sub(off), "debug parameters")?;
+    let mut parameter_names = vec_with_capacity(parameters_size, "debug parameters")?;
     for _ in 0..parameters_size {
         let (name_idx_p1, n) =
             read_uleb128p1(data, off).ok_or(DexError::Truncated("debug param name".into()))?;

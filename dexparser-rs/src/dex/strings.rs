@@ -1,5 +1,6 @@
 //! string_ids and string_data_item (MUTF-8).
 
+use crate::bounds::{table_end, vec_with_capacity};
 use crate::error::{DexError, Result};
 use crate::leb128::{read_u32, read_uleb128};
 
@@ -17,11 +18,11 @@ impl DexStrings {
         if n == 0 {
             return Ok(Self { offsets: vec![] });
         }
-        let size_needed = off + n * 4;
+        let size_needed = table_end(off, n, 4, "string_ids")?;
         if data.len() < size_needed {
             return Err(DexError::Truncated("string_ids".into()));
         }
-        let mut offsets = Vec::with_capacity(n);
+        let mut offsets = vec_with_capacity(n, "string_ids")?;
         for i in 0..n {
             let o = read_u32(data, off + i * 4).ok_or(DexError::Truncated("string_id_item".into()))?;
             offsets.push(o);

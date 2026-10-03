@@ -135,7 +135,11 @@ impl DexFile {
             return Err(DexError::Truncated("interfaces type_list".into()));
         }
         let size = crate::leb128::read_u32(&self.data, off).unwrap_or(0) as usize;
-        let mut out = Vec::with_capacity(size);
+        let end = crate::bounds::table_end(off + 4, size, 2, "interfaces type_list")?;
+        if end > self.data.len() {
+            return Err(DexError::Truncated("interfaces type_list".into()));
+        }
+        let mut out = crate::bounds::vec_with_capacity(size, "interfaces")?;
         for i in 0..size {
             let idx = crate::leb128::read_u16(&self.data, off + 4 + i * 2).unwrap_or(0) as u32;
             out.push(self.get_type(idx)?);

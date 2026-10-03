@@ -1,5 +1,6 @@
 //! type_ids: descriptor_idx (into string_ids).
 
+use crate::bounds::{table_end, vec_with_capacity};
 use crate::error::{DexError, Result};
 use crate::leb128::read_u32;
 use super::strings::DexStrings;
@@ -17,11 +18,11 @@ impl DexTypes {
         if n == 0 {
             return Ok(Self { descriptor_idxs: vec![] });
         }
-        let size_needed = off + n * 4;
+        let size_needed = table_end(off, n, 4, "type_ids")?;
         if data.len() < size_needed {
             return Err(DexError::Truncated("type_ids".into()));
         }
-        let mut descriptor_idxs = Vec::with_capacity(n);
+        let mut descriptor_idxs = vec_with_capacity(n, "type_ids")?;
         for i in 0..n {
             let idx = read_u32(data, off + i * 4).ok_or(DexError::Truncated("type_id_item".into()))?;
             descriptor_idxs.push(idx);

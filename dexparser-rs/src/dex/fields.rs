@@ -1,5 +1,6 @@
 //! field_ids: class_idx (ushort), type_idx (ushort), name_idx (uint).
 
+use crate::bounds::{table_end, vec_with_capacity};
 use crate::error::{DexError, Result};
 use crate::leb128::{read_u32, read_u16};
 use super::DexHeader;
@@ -23,11 +24,11 @@ impl DexFields {
         if n == 0 {
             return Ok(Self { items: vec![] });
         }
-        let size_needed = off + n * 8;
+        let size_needed = table_end(off, n, 8, "field_ids")?;
         if data.len() < size_needed {
             return Err(DexError::Truncated("field_ids".into()));
         }
-        let mut items = Vec::with_capacity(n);
+        let mut items = vec_with_capacity(n, "field_ids")?;
         for i in 0..n {
             let base = off + i * 8;
             let class_idx = read_u16(data, base).ok_or(DexError::Truncated("field class_idx".into()))?;

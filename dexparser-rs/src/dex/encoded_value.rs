@@ -1,5 +1,6 @@
 //! DEX `encoded_value` / `encoded_array` decode + encode.
 
+use crate::bounds::{ensure_count_fits, vec_with_capacity};
 use crate::error::{DexError, Result};
 use crate::leb128::{read_uleb128, write_uleb128};
 
@@ -118,7 +119,9 @@ pub fn decode_encoded_array(data: &[u8], mut pos: usize) -> Result<(Vec<EncodedV
     let (size, n) =
         read_uleb128(data, pos).ok_or(DexError::Truncated("encoded_array size".into()))?;
     pos += n;
-    let mut out = Vec::with_capacity(size as usize);
+    let size = size as usize;
+    ensure_count_fits(size, data.len().saturating_sub(pos), "encoded_array")?;
+    let mut out = vec_with_capacity(size, "encoded_array")?;
     for _ in 0..size {
         let (v, np) = decode_encoded_value(data, pos)?;
         pos = np;
@@ -134,7 +137,9 @@ pub fn decode_encoded_annotation(data: &[u8], mut pos: usize) -> Result<(Encoded
     let (size, n) =
         read_uleb128(data, pos).ok_or(DexError::Truncated("annotation size".into()))?;
     pos += n;
-    let mut elements = Vec::with_capacity(size as usize);
+    let size = size as usize;
+    ensure_count_fits(size, data.len().saturating_sub(pos), "annotation elements")?;
+    let mut elements = vec_with_capacity(size, "annotation elements")?;
     for _ in 0..size {
         let (name_idx, n) =
             read_uleb128(data, pos).ok_or(DexError::Truncated("annotation name".into()))?;

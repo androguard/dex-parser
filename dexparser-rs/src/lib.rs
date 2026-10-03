@@ -23,10 +23,12 @@
 //! }
 //! ```
 
+pub mod bounds;
 pub mod error;
 pub mod leb128;
 pub mod dex;
 
+pub use bounds::{capacity_ok, ensure_count_fits, table_end, vec_with_capacity};
 pub use error::{DexError, Result};
 pub use dex::{
     build_debug_info, build_simple_debug, escape_string_literal, format_value_literal,

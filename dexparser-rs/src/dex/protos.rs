@@ -1,5 +1,6 @@
 //! proto_ids: shorty_idx, return_type_idx, parameters_off.
 
+use crate::bounds::{table_end, vec_with_capacity};
 use crate::error::{DexError, Result};
 use crate::leb128::{read_u32, read_u16};
 use super::{DexTypes, strings::DexStrings};
@@ -24,11 +25,11 @@ impl DexProtos {
         if n == 0 {
             return Ok(Self { items: vec![] });
         }
-        let size_needed = off + n * 12;
+        let size_needed = table_end(off, n, 12, "proto_ids")?;
         if data.len() < size_needed {
             return Err(DexError::Truncated("proto_ids".into()));
         }
-        let mut items = Vec::with_capacity(n);
+        let mut items = vec_with_capacity(n, "proto_ids")?;
         for i in 0..n {
             let base = off + i * 12;
             let shorty_idx = read_u32(data, base).ok_or(DexError::Truncated("proto shorty_idx".into()))?;

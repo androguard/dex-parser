@@ -3,6 +3,7 @@
 //! Located via `map_list` (`TYPE_CALL_SITE_ID_ITEM` = 0x0007,
 //! `TYPE_METHOD_HANDLE_ITEM` = 0x0008).
 
+use crate::bounds::{ensure_count_fits, table_end, vec_with_capacity};
 use crate::error::{DexError, Result};
 use crate::leb128::{read_u16, read_u32, read_uleb128};
 
@@ -179,7 +180,11 @@ fn parse_map_list(data: &[u8], map_off: u32) -> Result<Vec<MapItem>> {
         return Err(DexError::Truncated("map_list".into()));
     }
     let size = read_u32(data, off).ok_or(DexError::Truncated("map_list size".into()))? as usize;
-    let mut out = Vec::with_capacity(size);
+    let end = table_end(off + 4, size, 12, "map_list")?;
+    if end > data.len() {
+        return Err(DexError::Truncated("map_list".into()));
+    }
+    let mut out = vec_with_capacity(size, "map_list")?;
     for i in 0..size {
         let base = off + 4 + i * 12;
         if base + 12 > data.len() {
@@ -203,10 +208,11 @@ fn parse_map_list(data: &[u8], map_off: u32) -> Result<Vec<MapItem>> {
 fn parse_call_site_ids(data: &[u8], offset: u32, size: u32) -> Result<Vec<u32>> {
     let off = offset as usize;
     let n = size as usize;
-    if off + n * 4 > data.len() {
+    let end = table_end(off, n, 4, "call_site_ids")?;
+    if end > data.len() {
         return Err(DexError::Truncated("call_site_ids".into()));
     }
-    let mut out = Vec::with_capacity(n);
+    let mut out = vec_with_capacity(n, "call_site_ids")?;
     for i in 0..n {
         let o = read_u32(data, off + i * 4)
             .ok_or(DexError::Truncated("call_site_id_item".into()))?;
@@ -218,10 +224,11 @@ fn parse_call_site_ids(data: &[u8], offset: u32, size: u32) -> Result<Vec<u32>> 
 fn parse_method_handles(data: &[u8], offset: u32, size: u32) -> Result<Vec<MethodHandleItem>> {
     let off = offset as usize;
     let n = size as usize;
-    if off + n * 8 > data.len() {
+    let end = table_end(off, n, 8, "method_handles")?;
+    if end > data.len() {
         return Err(DexError::Truncated("method_handles".into()));
     }
-    let mut out = Vec::with_capacity(n);
+    let mut out = vec_with_capacity(n, "method_handles")?;
     for i in 0..n {
         let base = off + i * 8;
         let handle_type =
@@ -251,7 +258,9 @@ fn parse_encoded_array(data: &[u8], off: usize) -> Result<Vec<Encoded>> {
     let (size, n) =
         read_uleb128(data, pos).ok_or(DexError::Truncated("encoded_array size".into()))?;
     pos += n;
-    let mut out = Vec::with_capacity(size as usize);
+    let size = size as usize;
+    ensure_count_fits(size, data.len().saturating_sub(pos), "call_site encoded_array")?;
+    let mut out = vec_with_capacity(size, "call_site encoded_array")?;
     for _ in 0..size {
         let (v, np) = parse_encoded_value(data, pos)?;
         pos = np;

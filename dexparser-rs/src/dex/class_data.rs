@@ -1,5 +1,6 @@
 //! class_data_item: uleb128 sizes, then encoded_field and encoded_method.
 
+use crate::bounds::{ensure_count_fits, vec_with_capacity};
 use crate::error::{DexError, Result};
 use crate::leb128::read_uleb128;
 use super::ClassDef;
@@ -45,8 +46,10 @@ impl ClassData {
         off += n;
 
         let read_fields = |count: u32, data: &[u8], off: &mut usize| -> Result<Vec<EncodedField>> {
+            let count = count as usize;
+            ensure_count_fits(count, data.len().saturating_sub(*off), "encoded_field")?;
             let mut prev_idx = 0u32;
-            let mut out = Vec::with_capacity(count as usize);
+            let mut out = vec_with_capacity(count, "encoded_field")?;
             for _ in 0..count {
                 let (idx_diff, n) = read_uleb128(data, *off).ok_or(DexError::Truncated("field_idx_diff".into()))?;
                 *off += n;
@@ -62,8 +65,10 @@ impl ClassData {
         let instance_fields = read_fields(instance_fields_size, data, &mut off)?;
 
         let read_methods = |count: u32, data: &[u8], off: &mut usize| -> Result<Vec<EncodedMethod>> {
+            let count = count as usize;
+            ensure_count_fits(count, data.len().saturating_sub(*off), "encoded_method")?;
             let mut prev_idx = 0u32;
-            let mut out = Vec::with_capacity(count as usize);
+            let mut out = vec_with_capacity(count, "encoded_method")?;
             for _ in 0..count {
                 let (idx_diff, n) = read_uleb128(data, *off).ok_or(DexError::Truncated("method_idx_diff".into()))?;
                 *off += n;
@@ -130,5 +135,33 @@ mod tests {
         assert!(cd.instance_fields.is_empty());
         assert!(cd.direct_methods.is_empty());
         assert!(cd.virtual_methods.is_empty());
+    }
+
+    #[test]
+    fn class_data_huge_count_is_err_not_panic() {
+        // class_data_off=1: static_fields_size = uleb128 0xFFFFFFFF (5 bytes), then zeros.
+        // Must return Err (capacity / count check), never panic with "capacity overflow".
+        let mut data = vec![0u8; 16];
+        data[1] = 0xff;
+        data[2] = 0xff;
+        data[3] = 0xff;
+        data[4] = 0xff;
+        data[5] = 0x0f; // uleb128 = 0xffff_ffff
+        let class_def = ClassDef {
+            class_idx: 0,
+            access_flags: 0,
+            superclass_idx: 0,
+            interfaces_off: 0,
+            source_file_idx: 0,
+            annotations_off: 0,
+            class_data_off: 1,
+            static_values_off: 0,
+        };
+        let err = ClassData::parse(&data, &class_def).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("capacity overflow") || msg.contains("exceeds remaining"),
+            "unexpected error: {msg}"
+        );
     }
 }

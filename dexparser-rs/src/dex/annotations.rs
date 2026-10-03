@@ -1,5 +1,6 @@
 //! Annotations directory / sets / items (DEX).
 
+use crate::bounds::{ensure_count_fits, vec_with_capacity};
 use crate::dex::encoded_value::{
     decode_encoded_annotation, encode_encoded_annotation, EncodedAnnotation, EncodedValue,
 };
@@ -45,7 +46,7 @@ pub fn parse_annotations_directory(data: &[u8], off: u32) -> Result<AnnotationsD
         Vec::new()
     };
 
-    let mut field_annotations = Vec::with_capacity(fields_size as usize);
+    let mut field_annotations = vec_with_capacity(fields_size as usize, "field_annotations")?;
     for _ in 0..fields_size {
         if pos + 8 > data.len() {
             return Err(DexError::Truncated("field_annotation".into()));
@@ -56,7 +57,7 @@ pub fn parse_annotations_directory(data: &[u8], off: u32) -> Result<AnnotationsD
         field_annotations.push((field_idx, parse_annotation_set(data, annotations_off)?));
     }
 
-    let mut method_annotations = Vec::with_capacity(methods_size as usize);
+    let mut method_annotations = vec_with_capacity(methods_size as usize, "method_annotations")?;
     for _ in 0..methods_size {
         if pos + 8 > data.len() {
             return Err(DexError::Truncated("method_annotation".into()));
@@ -67,7 +68,7 @@ pub fn parse_annotations_directory(data: &[u8], off: u32) -> Result<AnnotationsD
         method_annotations.push((method_idx, parse_annotation_set(data, annotations_off)?));
     }
 
-    let mut parameter_annotations = Vec::with_capacity(params_size as usize);
+    let mut parameter_annotations = vec_with_capacity(params_size as usize, "parameter_annotations")?;
     for _ in 0..params_size {
         if pos + 8 > data.len() {
             return Err(DexError::Truncated("parameter_annotation".into()));
@@ -95,7 +96,8 @@ fn parse_annotation_set(data: &[u8], off: u32) -> Result<Vec<AnnotationItem>> {
         return Err(DexError::Truncated("annotation_set".into()));
     }
     let size = read_u32(data, pos).unwrap_or(0) as usize;
-    let mut out = Vec::with_capacity(size);
+    ensure_count_fits(size, data.len().saturating_sub(pos.saturating_add(4)) / 4, "annotation_set")?;
+    let mut out = vec_with_capacity(size, "annotation_set")?;
     for i in 0..size {
         let item_off = read_u32(data, pos + 4 + i * 4)
             .ok_or(DexError::Truncated("annotation_off".into()))?;
@@ -113,7 +115,8 @@ fn parse_annotation_set_ref_list(data: &[u8], off: u32) -> Result<Vec<Vec<Annota
         return Err(DexError::Truncated("annotation_set_ref_list".into()));
     }
     let size = read_u32(data, pos).unwrap_or(0) as usize;
-    let mut out = Vec::with_capacity(size);
+    ensure_count_fits(size, data.len().saturating_sub(pos.saturating_add(4)) / 4, "annotation_set_ref_list")?;
+    let mut out = vec_with_capacity(size, "annotation_set_ref_list")?;
     for i in 0..size {
         let set_off = read_u32(data, pos + 4 + i * 4).unwrap_or(0);
         out.push(parse_annotation_set(data, set_off)?);
