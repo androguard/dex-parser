@@ -23,7 +23,7 @@ pub mod slice;
 
 pub use header::{DexHeader, DEX_MAGIC, is_dex};
 pub use strings::{decode_mutf8, encode_mutf8, DexStrings};
-pub use raw::RawDex;
+pub use raw::{RawDex, RawMethod};
 pub use fastref::{dex_defines_class, FastRef, MemberQuery, RefSite};
 pub use slice::DexSlicer;
 pub use types::DexTypes;

@@ -42,8 +42,9 @@ pub use dex::{
     MethodType, BuiltClass, BuiltCode, BuiltField, BuiltMethod, BuiltTry, PoolMaps, ProtoId,
     TryItem, VISIBILITY_BUILD, VISIBILITY_RUNTIME, VISIBILITY_SYSTEM, DEX_MAGIC, NO_INDEX, is_dex,
     parse_debug_info, parse_debug_info_with_types, fix_checksums, patch_code_insns, replace_code_insns,
-    encode_mutf8, RawDex, FastRef, MemberQuery, RefSite, dex_defines_class, DexSlicer,
+    encode_mutf8, RawDex, RawMethod, FastRef, MemberQuery, RefSite, dex_defines_class, DexSlicer,
 };
+pub use dex::fastref::group_by_method;
 
 #[cfg(test)]
 mod test_helpers {

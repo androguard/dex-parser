@@ -3,6 +3,8 @@
 pub mod locator;
 pub mod scan;
 
+use std::collections::BTreeMap;
+
 use crate::dex::raw::RawDex;
 use crate::error::Result;
 
@@ -83,6 +85,17 @@ impl<'a> FastRef<'a> {
         self.scan_and_resolve(RefKind::Method, &[method_idx], self.dex.method_ids.size)
     }
 
+    /// One code-region scan for all `wanted` pool indices of `kind`.
+    pub fn find_pool_batch(&mut self, kind: RefKind, wanted: &[u32]) -> Result<Vec<RefSite>> {
+        let pool_size = match kind {
+            RefKind::String => self.dex.string_ids.size,
+            RefKind::Type => self.dex.type_ids.size,
+            RefKind::Field => self.dex.field_ids.size,
+            RefKind::Method => self.dex.method_ids.size,
+        };
+        self.scan_and_resolve(kind, wanted, pool_size)
+    }
+
     fn scan_and_resolve(
         &mut self,
         kind: RefKind,
@@ -124,6 +137,18 @@ impl<'a> FastRef<'a> {
         }
         Ok(sites)
     }
+}
+
+/// Group reference sites by defining method (`method_idx` → distinct `pool_idx` values).
+pub fn group_by_method(sites: &[RefSite]) -> BTreeMap<u32, Vec<u32>> {
+    let mut out: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+    for site in sites {
+        let entry = out.entry(site.method_idx).or_default();
+        if !entry.contains(&site.pool_idx) {
+            entry.push(site.pool_idx);
+        }
+    }
+    out
 }
 
 /// True if this DEX **defines** `descriptor` (not merely references it).

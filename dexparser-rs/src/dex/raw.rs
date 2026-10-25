@@ -3,7 +3,19 @@
 use crate::error::{DexError, Result};
 use crate::leb128::read_u32;
 
+use super::class_data::ClassData;
+use super::class_def::ClassDef;
+use super::code_item::CodeItem;
 use super::DexFile;
+
+/// Method with executable code (`code_off != 0`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RawMethod {
+    pub class_idx: u32,
+    pub method_idx: u32,
+    pub access: u32,
+    pub code_off: u32,
+}
 
 /// Table view: `(offset, size)` of id items.
 #[derive(Debug, Clone, Copy)]
@@ -122,6 +134,41 @@ impl<'a> RawDex<'a> {
         Ok(&self.data[start..end])
     }
 
+    /// Parse `class_def_item` at index `idx`.
+    pub fn class_def_at(&self, idx: u32) -> Result<ClassDef> {
+        if idx >= self.class_defs.size {
+            return Err(DexError::Truncated("class_def index".into()));
+        }
+        let off = self.class_defs.off as usize + idx as usize * 32;
+        if self.data.len() < off + 32 {
+            return Err(DexError::Truncated("class_def_item".into()));
+        }
+        Ok(ClassDef {
+            class_idx: read_u32(self.data, off).ok_or(DexError::Truncated("class_def class_idx".into()))?,
+            access_flags: read_u32(self.data, off + 4).ok_or(DexError::Truncated("class_def access_flags".into()))?,
+            superclass_idx: read_u32(self.data, off + 8).ok_or(DexError::Truncated("class_def superclass_idx".into()))?,
+            interfaces_off: read_u32(self.data, off + 12).ok_or(DexError::Truncated("class_def interfaces_off".into()))?,
+            source_file_idx: read_u32(self.data, off + 16).ok_or(DexError::Truncated("class_def source_file_idx".into()))?,
+            annotations_off: read_u32(self.data, off + 20).ok_or(DexError::Truncated("class_def annotations_off".into()))?,
+            class_data_off: read_u32(self.data, off + 24).ok_or(DexError::Truncated("class_def class_data_off".into()))?,
+            static_values_off: read_u32(self.data, off + 28).ok_or(DexError::Truncated("class_def static_values_off".into()))?,
+        })
+    }
+
+    /// Parse `code_item` at `code_off`.
+    pub fn code_item_at(&self, code_off: u32) -> Result<CodeItem> {
+        CodeItem::parse(self.data, code_off)
+    }
+
+    /// Iterate encoded methods (direct + virtual) that have a `code_item`.
+    pub fn methods_with_code(&self) -> MethodsWithCodeIter<'_> {
+        MethodsWithCodeIter {
+            dex: self,
+            class_i: 0,
+            pending: None,
+        }
+    }
+
     /// Look up map_list entry of `type_` (e.g. `0x2001` CODE_ITEM). Returns `(size, offset)`.
     pub fn map_entry(&self, type_: u16) -> Option<(u32, u32)> {
         if self.map_off == 0 {
@@ -146,6 +193,58 @@ impl<'a> RawDex<'a> {
             p += 12;
         }
         None
+    }
+}
+
+/// Iterator over [`RawMethod`] entries with non-zero `code_off`.
+pub struct MethodsWithCodeIter<'a> {
+    dex: &'a RawDex<'a>,
+    class_i: u32,
+    pending: Option<(u32, std::vec::IntoIter<super::class_data::EncodedMethod>)>,
+}
+
+impl<'a> Iterator for MethodsWithCodeIter<'a> {
+    type Item = Result<RawMethod>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some((class_idx, methods)) = &mut self.pending {
+                let class_idx = *class_idx;
+                while let Some(m) = methods.next() {
+                    if m.code_off != 0 {
+                        return Some(Ok(RawMethod {
+                            class_idx,
+                            method_idx: m.method_idx,
+                            access: m.access_flags,
+                            code_off: m.code_off,
+                        }));
+                    }
+                }
+                self.pending = None;
+            }
+
+            if self.class_i >= self.dex.class_defs.size {
+                return None;
+            }
+            let table_idx = self.class_i;
+            self.class_i += 1;
+            let class_def = match self.dex.class_def_at(table_idx) {
+                Ok(c) => c,
+                Err(e) => return Some(Err(e)),
+            };
+            let class_idx = class_def.class_idx;
+            let data = match ClassData::parse(self.dex.data, &class_def) {
+                Ok(Some(d)) => d,
+                Ok(None) => continue,
+                Err(e) => return Some(Err(e)),
+            };
+            let mut combined = data.direct_methods;
+            combined.extend(data.virtual_methods);
+            if combined.is_empty() {
+                continue;
+            }
+            self.pending = Some((class_idx, combined.into_iter()));
+        }
     }
 }
 
